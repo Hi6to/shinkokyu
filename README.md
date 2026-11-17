@@ -15,7 +15,7 @@ JPHACKS 2026 にチーム「こんにちは」（3人）で出場した作品を
 
 Hack Day で提出した版：[jphacks/sp_2605](https://github.com/jphacks/sp_2605)
 
-<p align="center"><img src="docs/images/survey_prototype.jpg" width="420" alt="試作した本体"></p>
+<p align="center"><img src="docs/images/device.jpg" width="480" alt="本体と、ストローを入れるケース"></p>
 
 ## できること
 
