@@ -84,14 +84,7 @@ flowchart LR
 
 ## 動かし方
 
-```bash
-cd desktop
-npm install
-npm start
-```
-
-- 本体のプログラムは Arduino IDE で `firmware/shinkokyu/` を Seeed XIAO nRF52840 に書きこむ（詳しくは [firmware/README.md](firmware/README.md)）
-- 声の機能には Python（faster-whisper）と Ollama が要る（[desktop/README.md](desktop/README.md)）
+アプリの起動は [desktop/README.md](desktop/README.md)、本体への書きこみは [firmware/README.md](firmware/README.md) にあります。
 
 ## 補足
 
