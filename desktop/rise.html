@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>シン呼吸 火の粉</title>
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+  // 11/12：もやもやの薪が燃えきったとき、札の言葉がほどけた火の粉が、右下の火の子の窓の上から、画面のいちばん上までのぼっていく。
+  //   言葉は出さない（火の粉だけ）。透明で押せない窓（main.js が、火の子の窓の上に重ねて、終わったらかくす）
+  //   火の子と同じドット絵の決まり：1マス＝3px×大きさ。火の色だけ（黄・明るい黄・橙）。濃いふちを付ける
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  const COLS = ['#ffe08a', '#ffd36e', '#ff9b54', '#ff9b54'];
+  let g = { ox: 0, oy: 0, gw: 200, scale: 1 }, parts = [], last = performance.now();
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  window.riseApi.onRise((d) => {
+    if (d.prep) { g = d; parts = []; return; }
+    const cell = 3 * g.scale, t = performance.now();
+    for (const p of d.ps || []) {
+      parts.push({
+        x: g.ox + p.u * g.gw, y: g.oy + cell, t0: t,
+        vy: -rnd(140, 240) * g.scale, acc: rnd(260, 480) * g.scale,   // 上へ、だんだん速く
+        sway: rnd(5, 14) * g.scale, ph: rnd(0, 6.3), drift: rnd(-25, 25) * g.scale,
+        big: (p.s || 1) > 1.45, c: (Math.random() * 4) | 0, out: rnd(0.05, 0.45), // out：画面の上からこの割合の所で、ちらちら消える
+        trail: [],
+      });
+    }
+  });
+  function frame() {
+    requestAnimationFrame(frame);
+    const t = performance.now(), dt = Math.min(0.05, (t - last) / 1000); last = t;
+    const dpr = window.devicePixelRatio || 1, W = innerWidth, H = innerHeight;
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    if (!parts.length) return;
+    const cell = 3 * g.scale, snap = (v) => Math.round(v / cell) * cell; // ドット絵のマスにそろえる
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i], age = (t - p.t0) / 1000;
+      p.vy -= p.acc * dt;
+      p.x += (p.drift + Math.cos(age * 5 + p.ph) * p.sway) * dt; p.y += p.vy * dt;
+      p.trail.unshift([p.x, p.y]); if (p.trail.length > 6) p.trail.pop();
+      const k = p.y / Math.max(1, g.oy);                       // 1＝出たところ → 0＝画面のいちばん上
+      if (p.y < -cell * 2 || (k < p.out && Math.random() < 0.18)) { parts.splice(i, 1); continue; }
+      const size = (p.big && k > 0.35 ? 2 : 1) * cell;
+      // 尾：通ってきた所に、小さく暗めの火の粉
+      for (let j = 2; j < p.trail.length; j += 2) { ctx.fillStyle = j > 3 ? '#ff9b54' : '#ffd36e'; ctx.globalAlpha = 0.75 - j * 0.1; ctx.fillRect(snap(p.trail[j][0]), snap(p.trail[j][1]), cell, cell); }
+      ctx.globalAlpha = 1;
+      const x = snap(p.x), y = snap(p.y);
+      ctx.fillStyle = 'rgba(11,13,18,0.85)'; ctx.fillRect(x - 1, y - 1, size + 2, size + 2); // 濃いふち
+      ctx.fillStyle = COLS[(p.c + Math.floor(t / 90)) % 4]; ctx.fillRect(x, y, size, size);
+    }
+  }
+  requestAnimationFrame(frame);
+</script>
+</body>
+</html>

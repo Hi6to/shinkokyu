@@ -1,0 +1,16 @@
+{
+  "name": "shinkokyu-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "シン呼吸：作業中の画面の一番手前に、煙を出すアプリ",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^45.2.3"
+  },
+  "dependencies": {
+    "uiohook-napi": "^1.5.5"
+  }
+}

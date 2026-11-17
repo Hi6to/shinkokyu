@@ -1,0 +1,9 @@
+gcode/body_tube.gcode
+gcode/body_tpu.gcode
+gcode/adapter.gcode
+gcode/stand_side_charge.gcode
+gcode/stand_plain.gcode
+gcode/stand_volcano.gcode
+gcode/stand_rocket.gcode
+gcode/stand_sword.gcode
+gcode/stand_sprout.gcode

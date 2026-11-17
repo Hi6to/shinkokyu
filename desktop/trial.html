@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>シン呼吸 休憩の実験</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+<style>
+  /* 操作パネルと同じ、レトロなゲームの窓：黒い箱＋白い二重の枠。画面いっぱいに出す（外を押して入力が外れないように） */
+  html, body { margin: 0; height: 100%; background: #0b0d12; color: #f2f4f8; font-family: "DotGothic16", "MS Gothic", monospace; user-select: none; overflow: hidden; }
+  .frame { position: absolute; inset: 8px; border: 2px solid #f2f4f8; outline: 1px solid #f2f4f8; outline-offset: 3px; display: flex; align-items: center; justify-content: center; text-align: center; padding: 16px; }
+  section { width: 100%; }
+  h1 { font-size: 28px; font-weight: normal; margin: 0 0 12px; }
+  p { font-size: 18px; line-height: 1.7; margin: 6px 0; color: #c9d0dc; }
+  b { color: #ffd84a; font-weight: normal; }
+  .note { font-size: 15px; color: #8d97aa; }
+  .step { font-size: 15px; color: #8d97aa; margin-bottom: 10px; letter-spacing: 2px; }
+  .tag { display: inline-block; border: 2px solid #f2f4f8; padding: 2px 12px; font-size: 16px; margin-bottom: 14px; }
+  .big { font-size: 112px; letter-spacing: 6px; color: #ffd84a; height: 140px; line-height: 140px; }
+  .big.fs { color: #ff8a7a; font-size: 60px; }
+  .arm { font-size: 44px; color: #ffd84a; margin: 10px 0 14px; }
+  .clock { font-size: 96px; letter-spacing: 6px; margin: 6px 0; }
+  button { font: inherit; font-size: 18px; background: #0b0d12; color: #f2f4f8; border: 2px solid #f2f4f8; padding: 6px 18px; cursor: pointer; margin: 10px 6px 0; }
+  button:hover, button:focus-visible { background: #f2f4f8; color: #0b0d12; outline: none; }
+  button:disabled { opacity: 0.35; cursor: default; background: #0b0d12; color: #f2f4f8; }
+  table { margin: 8px auto 6px; border-collapse: collapse; font-size: 19px; }
+  td, th { padding: 4px 16px; text-align: right; font-weight: normal; }
+  th { color: #8d97aa; font-size: 15px; }
+  td:first-child { text-align: left; }
+  td.v { color: #ffd84a; }
+  .meter { width: 440px; max-width: 80%; height: 24px; border: 2px solid #f2f4f8; margin: 16px auto 8px; position: relative; }
+  .meter i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #ffd84a; }
+  #focushint { position: absolute; left: 0; right: 0; bottom: 36px; color: #ff8a7a; font-size: 20px; }
+  #quit { position: fixed; top: 20px; right: 24px; font-size: 15px; padding: 2px 10px; margin: 0; opacity: 0.75; z-index: 2; }
+  #quit:hover { opacity: 1; }
+  .choices { display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; margin: 10px 0 8px; }
+  .choice { width: 380px; max-width: 100%; border: 2px solid #f2f4f8; padding: 12px 14px 14px; }
+  .choice button { width: 100%; margin: 0 0 8px; }
+  .hide { display: none !important; }
+</style>
+</head>
+<body>
+<div class="frame">
+  <!-- 1. はじめに -->
+  <section id="intro">
+    <div class="step">シン呼吸 休憩の実験</div>
+    <h1>どちらをやりますか</h1>
+    <div class="choices">
+      <div class="choice">
+        <button id="goTrial">スペースキー：休憩の実験（約10分）</button>
+        <p class="note">反応テスト3分 → くじで決まる過ごし方3分 → 反応テスト3分</p>
+        <p class="note" id="armsNote">過ごし方は「深呼吸（本体に吹く）」「呼吸しないで休む」「休まない」のどれか</p>
+      </div>
+      <div class="choice">
+        <button id="goSolo">2 キー：反応テストだけ（3分）</button>
+        <p class="note">スペースキーを押すテストを1回だけ。本体はいらない</p>
+      </div>
+    </div>
+    <p id="dev">本体：たしかめています…</p>
+    <button id="connect" class="hide">本体をつなぐ</button>
+    <p class="note">とちゅうでやめるときは Esc</p>
+  </section>
+
+  <!-- 反応テスト（数字だけ） -->
+  <section id="test" class="hide">
+    <div class="big" id="num"></div>
+  </section>
+  <section id="testintro" class="hide">
+    <div class="step" id="tiStep"></div>
+    <h1 id="tiTitle">反応テスト（3分）</h1>
+    <p>まんなかに数字が出たら、できるだけ早く <b>スペースキー</b> を押してください。</p>
+    <p class="note">数字が出る前に押すと「はやい」になります</p>
+    <button id="tiGo">スペースキーで始める</button>
+  </section>
+
+  <!-- 2. くじの結果 -->
+  <section id="lot" class="hide">
+    <div class="step">2 / 3　くじの結果</div>
+    <div class="arm" id="lotArm"></div>
+    <p id="lotHow"></p>
+    <button id="lotGo">スペースキーで始める（3分）</button>
+  </section>
+
+  <!-- 2. 過ごし方（3分） -->
+  <section id="act" class="hide">
+    <div class="step">2 / 3　過ごし方</div>
+    <div class="tag" id="actArm"></div>
+    <div class="clock" id="actClock">3:00</div>
+    <p id="actHow"></p>
+    <div id="breathBox" class="hide">
+      <div class="meter"><i id="meter"></i></div>
+      <p>息 <b id="bN">0</b> 回　さっきの息 <b id="bLast">―</b> 秒</p>
+      <p class="note" id="bHint"></p>
+    </div>
+  </section>
+
+  <!-- 結果 -->
+  <section id="result" class="hide">
+    <h1>おつかれさまでした</h1>
+    <table>
+      <tr><th></th><th>はじめ</th><th>過ごしたあと</th></tr>
+      <tr><td>ふつうの反応</td><td class="v" id="r1a"></td><td class="v" id="r1b"></td></tr>
+      <tr><td>おそかった（0.355秒以上）</td><td class="v" id="r2a"></td><td class="v" id="r2b"></td></tr>
+      <tr><td>はやすぎた</td><td class="v" id="r3a"></td><td class="v" id="r3b"></td></tr>
+    </table>
+    <p id="rArm" class="note"></p>
+    <p id="rBreath"></p>
+    <button id="close">とじる</button>
+  </section>
+
+  <!-- 反応テストだけの結果 -->
+  <section id="soloResult" class="hide">
+    <h1>おつかれさまでした</h1>
+    <table>
+      <tr><td>ふつうの反応</td><td class="v" id="s1"></td></tr>
+      <tr><td>おそかった（0.355秒以上）</td><td class="v" id="s2"></td></tr>
+      <tr><td>はやすぎた</td><td class="v" id="s3"></td></tr>
+    </table>
+    <button id="close2">とじる</button>
+  </section>
+</div>
+<button id="quit" title="実験をやめる（Esc）">× やめる（Esc）</button>
+<div id="focushint" class="hide">この窓から入力が外れています。窓を押してから、スペースキーを押してください</div>
+<script>
+  // 反応テストは PVT-B：数字が出るまでの間は 1〜4秒のでたらめ。0.1秒より早い反応は「はやい」、0.355秒以上は「おそい」
+  const $ = (id) => document.getElementById(id);
+  const QUICK = new URLSearchParams(location.search).has('quick'); // ?quick=1：テストも過ごし方も20秒の短い版（ためし用）
+  const PVT_MS = QUICK ? 20000 : 180000, ACT_MS = QUICK ? 20000 : 180000;
+  const ISI_MIN = 1000, ISI_MAX = 4000, FALSE_START = 100, LAPSE = 355, TIMEOUT = 30000;
+
+  // アプリの外（ふつうのブラウザ）で開いたときは、記録なし・本体なしで流れだけ動かす
+  const api = window.trialApi || {
+    onState: (cb) => setTimeout(() => cb({ connected: true, names: ['（ためし）'] }), 100), onLive() {}, connect() {},
+    begin: async () => ({}), pvtStart() {},
+    pvtDone: async (kind) => (kind === 'pre' ? { arm: 'breath', label: '深呼吸（本体）', how: '本体に、ゆっくり長く吹いてください（ためし）' } : {}),
+    activityStart() {}, activityEnd: async () => ({ count: 0 }), cancel() { location.reload(); }, close() { location.reload(); },
+  };
+
+  let phase = 'intro'; // 実験：intro → testintro(pre) → pre → lot → act → testintro(post) → post → result。反応テストだけ：intro → testintro(solo) → solo → result
+  let connected = false, arm = null, armInfo = null, preStats = null;
+  const show = (id) => document.querySelectorAll('section').forEach((s) => s.classList.toggle('hide', s.id !== id));
+  const sec3 = (ms) => (ms == null ? '―' : `${(ms / 1000).toFixed(3)}秒`);
+
+  api.onState((s) => {
+    connected = !!s.connected;
+    $('dev').innerHTML = connected ? `本体：<b>${s.names.join('、')}</b> とつながっている` : '本体：つながっていない（本体があるなら、先につなぐと「深呼吸」も出る）';
+    $('connect').classList.toggle('hide', connected);
+    $('armsNote').textContent = connected
+      ? '過ごし方は「深呼吸（本体に吹く）」「呼吸しないで休む」「休まない」のどれか'
+      : '本体がないので、過ごし方は「呼吸しないで休む」「休まない」のどちらか';
+  });
+  $('connect').onclick = () => { $('dev').textContent = '本体：さがしています…（電源を入れて、近くに置いてください）'; api.connect(); };
+
+  // ---------------- 反応テスト ----------------
+  const pvt = { running: false };
+  function testIntro(kind) {
+    phase = 'testintro'; pvt.kind = kind;
+    $('tiStep').textContent = { pre: '1 / 3　はじめの反応テスト', post: '3 / 3　過ごしたあとの反応テスト', solo: '反応テストだけ' }[kind];
+    $('tiTitle').textContent = kind === 'post' ? 'もう一度、反応テスト（3分）' : '反応テスト（3分）';
+    show('testintro');
+  }
+  function pvtStart() {
+    Object.assign(pvt, { running: true, t0: performance.now(), trials: [], falseStarts: 0, focusLost: 0, showing: false, onset: 0, lost: false });
+    phase = pvt.kind; show('test');
+    $('num').textContent = ''; $('num').classList.remove('fs');
+    api.pvtStart(pvt.kind);
+    pvtNext(2000);
+  }
+  function pvtNext(delay) {
+    clearTimeout(pvt.nextT);
+    if (performance.now() - pvt.t0 >= PVT_MS) { pvtFinish(); return; }
+    pvt.nextT = setTimeout(pvtStim, delay ?? ISI_MIN + Math.random() * (ISI_MAX - ISI_MIN));
+  }
+  // 数字を出す：はじめて画面に描いたときから数える
+  function pvtStim() {
+    clearTimeout(pvt.clearT);
+    $('num').classList.remove('fs');
+    pvt.showing = true; pvt.onset = 0; pvt.lost = !document.hasFocus();
+    const tick = (ts) => {
+      if (!pvt.showing) return;
+      if (!pvt.onset) pvt.onset = ts;
+      const ms = Math.max(0, Math.round(performance.now() - pvt.onset));
+      $('num').textContent = String(ms).padStart(3, '0');
+      if (ms >= TIMEOUT) { pvtRespond(performance.now()); return; }
+      pvt.raf = requestAnimationFrame(tick);
+    };
+    pvt.raf = requestAnimationFrame(tick);
+  }
+  function flash(text, warn) {
+    $('num').textContent = text;
+    $('num').classList.toggle('fs', !!warn);
+    clearTimeout(pvt.clearT);
+    pvt.clearT = setTimeout(() => { if (!pvt.showing) { $('num').textContent = ''; $('num').classList.remove('fs'); } }, 1000);
+  }
+  function pvtRespond(at) {
+    if (!pvt.showing || !pvt.onset) { pvt.falseStarts++; flash('はやい', true); pvtNext(); return; } // 数字が出る前に押した
+    pvt.showing = false; cancelAnimationFrame(pvt.raf);
+    const rt = Math.min(TIMEOUT, Math.round(at - pvt.onset));
+    if (rt < FALSE_START) { pvt.falseStarts++; flash('はやい', true); }
+    else { pvt.trials.push({ t: Math.round(pvt.onset - pvt.t0), rt, f: pvt.lost ? 1 : 0 }); flash(String(rt).padStart(3, '0')); }
+    pvtNext();
+  }
+  function stats(trials, falseStarts, focusLost) {
+    const rts = trials.map((x) => x.rt), sorted = [...rts].sort((a, b) => a - b);
+    return {
+      n: rts.length,
+      medianRt: sorted.length ? sorted[Math.floor(sorted.length / 2)] : null,
+      meanRt: rts.length ? Math.round(rts.reduce((s, x) => s + x, 0) / rts.length) : null,
+      speed: rts.length ? +(rts.reduce((s, x) => s + 1000 / x, 0) / rts.length).toFixed(3) : null, // 反応のはやさ（1 ÷ 反応時間の平均。研究でよく使う）
+      lapses: rts.filter((x) => x >= LAPSE).length,
+      falseStarts, focusLost,
+      flagged: trials.filter((x) => x.f).length, // 窓から入力が外れていた間の回（あとで外せるように）
+    };
+  }
+  async function pvtFinish() {
+    pvt.running = false; pvt.showing = false; cancelAnimationFrame(pvt.raf); clearTimeout(pvt.nextT); clearTimeout(pvt.clearT);
+    $('focushint').classList.add('hide');
+    const s = stats(pvt.trials, pvt.falseStarts, pvt.focusLost);
+    const r = await api.pvtDone(pvt.kind, { stats: s, trials: pvt.trials, durationMs: Math.round(performance.now() - pvt.t0) });
+    if (pvt.kind === 'solo') { showSolo(s); return; }
+    if (pvt.kind === 'pre') {
+      preStats = s; arm = r.arm; armInfo = r;
+      phase = 'lot';
+      $('lotArm').textContent = r.label; $('lotHow').textContent = r.how;
+      show('lot');
+    } else {
+      showResult(s, r);
+    }
+  }
+
+  // ---------------- 過ごし方（3分） ----------------
+  let actT0 = 0, actTimer = 0, bN = 0, exStart = 0;
+  function actStart() {
+    phase = 'act'; show('act');
+    $('actArm').textContent = armInfo.label; $('actHow').textContent = armInfo.how;
+    $('breathBox').classList.toggle('hide', arm !== 'breath');
+    bN = 0; exStart = 0; $('bN').textContent = '0'; $('bLast').textContent = '―'; $('bHint').textContent = '';
+    actT0 = Date.now();
+    api.activityStart(arm);
+    actTimer = setInterval(actTick, 200); actTick();
+    if (arm === 'breath') requestAnimationFrame(meterTick);
+  }
+  function actTick() {
+    const left = Math.max(0, ACT_MS - (Date.now() - actT0));
+    const s = Math.ceil(left / 1000);
+    $('actClock').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    if (arm === 'breath' && bN === 0 && !exStart && Date.now() - actT0 > 20000) $('bHint').textContent = '本体に息が届いていないようです。吹き口に口を当てて、まっすぐ吹いてください';
+    if (left <= 0) actEnd();
+  }
+  function meterTick() {
+    if (phase !== 'act') return;
+    $('meter').style.width = exStart ? `${Math.min(100, (performance.now() - exStart) / 60)}%` : '0%'; // 6秒でいっぱい
+    requestAnimationFrame(meterTick);
+  }
+  api.onLive((type, d) => {
+    if (phase !== 'act' || arm !== 'breath') return;
+    if (type === 'exhale_start') { exStart = performance.now(); $('bHint').textContent = ''; }
+    if (type === 'exhale_end') { exStart = 0; bN++; $('bN').textContent = bN; if (d && d.sec != null) $('bLast').textContent = Number(d.sec).toFixed(1); }
+  });
+  async function actEnd() {
+    clearInterval(actTimer);
+    phase = 'mid';
+    await api.activityEnd();
+    testIntro('post');
+  }
+
+  // ---------------- 結果 ----------------
+  function showResult(s, r) {
+    phase = 'result';
+    $('r1a').textContent = sec3(preStats.medianRt); $('r1b').textContent = sec3(s.medianRt);
+    $('r2a').textContent = `${preStats.lapses} 回`; $('r2b').textContent = `${s.lapses} 回`;
+    $('r3a').textContent = `${preStats.falseStarts} 回`; $('r3b').textContent = `${s.falseStarts} 回`;
+    $('rArm').textContent = `過ごし方：${armInfo.label}`;
+    const b = r.breath;
+    $('rBreath').innerHTML = arm === 'breath' && b && b.count ? `息 <b>${b.count}回</b>（1分に ${b.perMin}回）・吐く長さ 平均 <b>${b.exhaleMean}秒</b>` : '';
+    show('result');
+    $('close').focus();
+  }
+
+  function showSolo(s) {
+    phase = 'result';
+    $('s1').textContent = sec3(s.medianRt); $('s2').textContent = `${s.lapses} 回`; $('s3').textContent = `${s.falseStarts} 回`;
+    show('soloResult');
+    $('close2').focus();
+  }
+
+  // ---------------- 操作 ----------------
+  let busy = false;
+  async function begin(mode) { // mode：trial＝休憩の実験、solo＝反応テストだけ
+    if (busy || phase !== 'intro') return;
+    busy = true; await api.begin(mode); busy = false;
+    testIntro(mode === 'solo' ? 'solo' : 'pre');
+  }
+  function space() {
+    if (phase === 'intro') begin('trial');
+    else if (pvt.running) return; // テスト中は下で受ける
+    else if (phase === 'testintro') pvtStart();
+    else if (phase === 'lot') actStart();
+  }
+  $('goTrial').onclick = () => begin('trial');
+  $('goSolo').onclick = () => begin('solo');
+  $('tiGo').onclick = () => { if (phase === 'testintro') pvtStart(); };
+  $('lotGo').onclick = () => { if (phase === 'lot') actStart(); };
+  $('close').onclick = () => api.close();
+  $('close2').onclick = () => api.close();
+  $('quit').onclick = () => (phase === 'result' ? api.close() : api.cancel()); // いつでも、強制的に終わる（やめた回も記録に残る）
+  addEventListener('keydown', (e) => {
+    if (e.code === 'Escape') { if (phase === 'result') api.close(); else api.cancel(); return; }
+    if (phase === 'intro' && (e.code === 'Digit2' || e.code === 'Numpad2')) { begin('solo'); return; }
+    if (e.code !== 'Space' || e.repeat) return;
+    e.preventDefault();
+    if (pvt.running) pvtRespond(e.timeStamp); else space();
+  }, true);
+  // 窓から入力が外れたら知らせる（その間の回には印を付けて、あとで外せるようにする）
+  addEventListener('blur', () => { if (pvt.running) { pvt.focusLost++; pvt.lost = true; $('focushint').classList.remove('hide'); } });
+  addEventListener('focus', () => $('focushint').classList.add('hide'));
+</script>
+</body>
+</html>

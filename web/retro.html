@@ -1,0 +1,1518 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>シン呼吸 煙の画面（レトロ版）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d12; color: #f2f4f8;
+    font-family: "DotGothic16", "MS Gothic", monospace; }
+  #screen { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: contain; image-rendering: pixelated; }
+  #scan { position: fixed; inset: 0; pointer-events: none; display: none;
+    background: repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0, rgba(0,0,0,0) 2px, rgba(0,0,0,.22) 3px, rgba(0,0,0,.22) 4px);
+    box-shadow: inset 0 0 140px rgba(0,0,0,.55); }
+  #scan.on { display: block; }
+  #toast { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); background: #0b0d12; border: 2px solid #f2f4f8;
+    padding: 4px 12px; font-size: 18px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #help { position: fixed; right: 14px; top: 14px; width: 330px; background: #0b0d12ee; border: 3px solid #f2f4f8; padding: 12px 14px; font-size: 15px; line-height: 1.7; }
+  #help.hidden { display: none; }
+  #help h2 { font-size: 15px; margin: 8px 0 2px; color: #ffd36e; font-weight: normal; }
+  #help h2:first-child { margin-top: 0; }
+  #help .on { color: #7ef0a8; } #help .off { color: #6b7385; }
+  #help button, #help input { font: inherit; font-size: 15px; background: #0b0d12; color: #f2f4f8; border: 2px solid #f2f4f8; padding: 2px 8px; cursor: pointer; }
+  #help input { width: 150px; cursor: text; }
+  #help .row { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0; }
+  #devices { margin: 2px 0; color: #a9b3c6; }
+  html.overlay, html.overlay body { background: transparent; }
+  html.overlay #help, html.overlay #gear, html.overlay #toast { display: none !important; }
+  html.overlay #screen { object-fit: fill; }
+  #close { position: absolute; top: 6px; right: 8px; border: none !important; font-size: 20px !important; padding: 0 6px !important; }
+  #gear { position: fixed; top: 12px; right: 12px; width: 40px; height: 40px; font: inherit; font-size: 22px; background: #0b0d12cc;
+    color: #f2f4f8; border: 2px solid #f2f4f8; cursor: pointer; opacity: 0; transition: opacity .3s; }
+  #gear.show { opacity: 1; }
+  .tabs { display: flex; gap: 0; margin: 2px 28px 10px 0; }
+  .tab { flex: 1; border-width: 2px !important; }
+  .tab + .tab { border-left: none !important; }
+  .tab.active { background: #f2f4f8 !important; color: #0b0d12 !important; }
+  #help .note { color: #a9b3c6; font-size: 14px; line-height: 1.6; margin-top: 6px; }
+  #help input[type=range] { width: 150px; accent-color: #f2f4f8; border: none; padding: 0; }
+  #volnum { font-size: 28px; min-width: 28px; text-align: center; }
+  #fxlist div { cursor: pointer; }
+</style>
+</head>
+<body>
+<canvas id="screen"></canvas>
+<div id="scan"></div>
+<div id="toast"></div>
+<button id="gear" title="設定を開く（H）" aria-label="設定を開く">⚙</button>
+<div id="help">
+  <button id="close" title="閉じる（H）" aria-label="閉じる">×</button>
+  <div class="tabs" role="tablist">
+    <button class="tab active" data-tab="main" role="tab">本体</button><button class="tab" data-tab="vol" role="tab">音量</button><button class="tab" data-tab="fx" role="tab">効果</button>
+  </div>
+  <section data-pane="main">
+    <div class="row"><button id="connect">本体をつなぐ</button><button id="full">いっぱいにする</button></div>
+    <div id="devices"></div>
+    <div class="row"><input id="moya" maxlength="6" placeholder="もやもや（6字まで）"><button id="addmoya">煙にする</button></div>
+    <div class="note">スペース：吸う（試す）／ F：全画面／ H：この表示</div>
+  </section>
+  <section data-pane="vol" hidden>
+    <div class="row" style="align-items:center"><button id="voldown" aria-label="音量を下げる">−</button><input type="range" id="vol" min="0" max="10" step="1" value="3" aria-label="本体の音量"><button id="volup" aria-label="音量を上げる">＋</button><span id="volnum">3</span></div>
+    <div class="note" id="volnote">本体の音量（0〜10。0 は音なし）。本体のボタン SW2・SW3 と同じ。本体をつなぐと変えられる</div>
+  </section>
+  <section data-pane="fx" hidden>
+    <div class="note">押すか、数字キーで 入れる・切る</div>
+    <div id="fxlist"></div>
+  </section>
+</div>
+
+<script type="module">
+import { ShinkokyuDevice, bluetoothAvailable } from './device.js';
+
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const approach = (x, target, rate, dt) => x + (target - x) * (1 - Math.exp(-rate * dt));
+const rnd = (a, b) => a + Math.random() * (b - a);
+const easeOutBack = (k) => { const c = 1.9; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); };
+
+// ---------------- 効果（数字キーで切りかえ） ----------------
+const FX = [
+  { key: '1', id: 'mono',   name: '曇りは白黒、晴れると色が戻る', on: true },
+  { key: '2', id: 'debris', name: 'ドットの破片が飛び散る',       on: true },
+  { key: '3', id: 'stop',   name: 'ヒットストップ（一瞬止まる）', on: true },
+  { key: '4', id: 'shake',  name: '画面の小さな揺れ',             on: true },
+  { key: '5', id: 'gauge',  name: '息のゲージ（今の息の長さ）',   on: true },
+  { key: '6', id: 'stars',  name: '光の粒が朝日に集まる',         on: true },
+  { key: '7', id: 'melt',   name: '文字がドットに崩れて飛ぶ',     on: true },
+  { key: '8', id: 'scan',   name: '走査線（ブラウン管ふう）',     on: false },
+];
+const on = (id) => FX.find((f) => f.id === id).on;
+function renderFxList() {
+  $('fxlist').innerHTML = FX.map((f) => `<div data-key="${f.key}">${f.key}：<span class="${f.on ? 'on' : 'off'}">${f.on ? '入' : '切'}</span> ${f.name}</div>`).join('');
+  $('scan').classList.toggle('on', on('scan'));
+}
+let toastTimer = 0;
+function toast(msg) { $('toast').textContent = msg; $('toast').style.opacity = 1; clearTimeout(toastTimer); toastTimer = setTimeout(() => ($('toast').style.opacity = 0), 1200); }
+renderFxList();
+
+// ---------------- 曲 ----------------
+const NOTE_NUM = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+function midiOf(name) {
+  let n = NOTE_NUM[name[0]], i = 1;
+  while (name[i] === '#' || name[i] === 'b') { n += name[i] === '#' ? 1 : -1; i++; }
+  return n + 12 * (parseInt(name.slice(i), 10) + 1);
+}
+class SongTracker {
+  constructor(song) { this.setSong(song); }
+  setSong(song) {
+    this.song = song; this.flat = []; let b = 0;
+    song.phrases.forEach((ph, pi) => ph.forEach(([name, beats], ni) => { this.flat.push({ pi, ni, start: b, beats, midi: midiOf(name) }); b += beats; }));
+    this.total = b; this.reset();
+  }
+  reset() { this.idx = 0; this.elapsed = 0; this.done = false; }
+  progress() { if (this.done) return 1; const n = this.flat[this.idx]; return (n.start + Math.min(this.elapsed, n.beats)) / this.total; }
+  syncTo(phrase, note, waiting) {
+    if (waiting && phrase === this.song.phrases.length) { this.done = true; return; }
+    const i = this.flat.findIndex((f) => f.pi === phrase - 1 && f.ni === note - 1);
+    if (i < 0) return;
+    if (i !== this.idx || this.done) { this.idx = i; this.elapsed = 0; this.done = false; }
+  }
+  advance(dt, exhaling, own) {
+    if (!exhaling || this.done) return null;
+    this.elapsed += dt * this.song.bpm / 60;
+    if (!own) return null;
+    let ev = null;
+    while (this.elapsed >= this.flat[this.idx].beats) {
+      this.elapsed -= this.flat[this.idx].beats;
+      if (this.idx === this.flat.length - 1) { this.elapsed = this.flat[this.idx].beats; this.done = true; return 'done'; }
+      this.idx++; ev = 'note';
+    }
+    return ev;
+  }
+}
+// 11/12：曲を2つに。本体の SW1 を押すたびに替わる。songs/index.json ＝ 本体と同じ順番の曲の一覧（make_songs.py が作る）
+const SONG_BOOK = {};
+{
+  let ids = ['amazing_grace'];
+  try { ids = (await (await fetch('../songs/index.json')).json()).songs; } catch {}
+  for (const id of ids) { try { SONG_BOOK[id] = await (await fetch(`../songs/${id}.json`)).json(); } catch {} }
+  if (!Object.keys(SONG_BOOK).length) SONG_BOOK.amazing_grace = await (await fetch('../songs/amazing_grace.json')).json();
+}
+const tracker = new SongTracker(Object.values(SONG_BOOK)[0]);
+// 煙の数のいちばん多いとき。前はアメイジング・グレイスの音の数×3（＝96）。曲を替えても煙の量は変えない（11/12）
+const MAX_PUFFS = 96;
+const MAXP = () => MAX_PUFFS;
+// 本体が今の曲を知らせてきたら、こちらの曲もそれに合わせる（違う曲だと、煙を消す速さがずれるため）
+function useSong(id) {
+  const song = SONG_BOOK[id];
+  if (!song || tracker.song === song) return;
+  tracker.setSong(song); st.poppedIdx = -1;
+  toast(`曲：${song.title}`);
+  if (window.shinkokyuApp) window.shinkokyuApp.log('song_change', { song: id });
+}
+
+// ---------------- 絵（小さな解像度で描いて、ドットのまま引きのばす） ----------------
+// デスクトップアプリ（desktop/）の透明な窓で開いたとき（?overlay=1）：作業中の画面の一番手前に煙を出す
+const OVERLAY = new URLSearchParams(location.search).has('overlay');
+if (OVERLAY) document.documentElement.classList.add('overlay');
+const LW = 384, LH = OVERLAY ? Math.round(LW * innerHeight / innerWidth) : 216; // 画面の縦横の比に合わせる
+const cv = $('screen'); cv.width = LW; cv.height = LH;
+const g = cv.getContext('2d', { willReadFrequently: true });
+g.imageSmoothingEnabled = false;
+
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
+const bayer = (x, y) => BAYER[(y & 3) * 4 + (x & 3)];
+const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+
+// 空：帯のグラデーション（帯の境目だけ網目でつなぐ。動かない）
+function makeSky(stops) {
+  const img = new Uint8ClampedArray(LW * LH * 4);
+  const cols = stops.map(([p, c]) => [p, hex(c)]);
+  for (let y = 0; y < LH; y++) {
+    const t = y / (LH - 1);
+    let i = 0; while (i < cols.length - 2 && t > cols[i + 1][0]) i++;
+    const [p0, c0] = cols[i], [p1, c1] = cols[i + 1];
+    const f = clamp((t - p0) / (p1 - p0), 0, 1);
+    for (let x = 0; x < LW; x++) {
+      const c = f > bayer(x, y) ? c1 : c0;
+      const o = (y * LW + x) * 4; img[o] = c[0]; img[o + 1] = c[1]; img[o + 2] = c[2]; img[o + 3] = 255;
+    }
+  }
+  return img;
+}
+const SKY_GREY = makeSky([[0, '#232832'], [0.45, '#343a47'], [0.8, '#474e5c'], [1, '#575f6e']]);
+const SKY_DAWN = makeSky([[0, '#1d3a78'], [0.35, '#3d78c4'], [0.62, '#8fb8e8'], [0.8, '#f3a65d'], [1, '#ffd98c']]);
+// 晴れ具合は段ごとに、画面全体が一度に変わる（少しずつ混ざらない）
+const STEPS = 8;
+const SKIES = Array.from({ length: STEPS + 1 }, (_, i) => {
+  const s = i / STEPS, img = new ImageData(LW, LH);
+  for (let o = 0; o < img.data.length; o++) img.data[o] = SKY_GREY[o] + (SKY_DAWN[o] - SKY_GREY[o]) * s;
+  return img;
+});
+const MONO = ['#191d26', '#454d5e', '#8b94a7', '#bcc3d0', '#e3e7ee'].map(hex); // 白と影の区別が残るよう5段
+const monoIndex = (l) => (l > 0.96 ? 4 : l > 0.82 ? 3 : l > 0.55 ? 2 : l > 0.25 ? 1 : 0);
+
+// ---------------- 煙のかたまり（ドット絵。形は変えず、まるごと動く） ----------------
+// いただいたフリー素材の雲（22×15マス）を写し取り、左右反転・列や行の足し引き・重ねで差分を作ったもの
+// （作り方は clouds/make_clouds.py、出どころは clouds/README.md。. 外 / # 黒い外枠 / o 白 / s 影）
+const CLOUD_MAPS = [
+  // もと
+  [
+    '.......######.........',
+    '......#ooooss#........',
+    '.....#soooooss####....',
+    '....#soooooosssooo#...',
+    '....#soooossoooooos#..',
+    '....#oooosooooooooo#..',
+    '..##ooooooooooooooo#..',
+    '.#sooooooooooooooooo#.',
+    '#ssoooooooooooooooooo#',
+    '#ssoooooooooooooooooo#',
+    '#ssoooooooooooooooooo#',
+    '#sssooooooosssoooooos#',
+    '.#sssssoossssssoooos#.',
+    '..##ssssss####sssss#..',
+    '....######....#####...',
+  ],
+  // 左右反転
+  [
+    '.........######.......',
+    '........#ssoooo#......',
+    '....####ssooooos#.....',
+    '...#ooosssoooooos#....',
+    '..#soooooossoooos#....',
+    '..#ooooooooosoooo#....',
+    '..#ooooooooooooooo##..',
+    '.#ooooooooooooooooos#.',
+    '#ooooooooooooooooooss#',
+    '#ooooooooooooooooooss#',
+    '#ooooooooooooooooooss#',
+    '#soooooosssooooooosss#',
+    '.#soooossssssoosssss#.',
+    '..#sssss####ssssss##..',
+    '...#####....######....',
+  ],
+  // 横長
+  [
+    '.......##########............',
+    '......#ooooooooss#...........',
+    '.....#soooooooooss#######....',
+    '....#soooooooooosssoooooo#...',
+    '....#soooooooossooooooooos#..',
+    '....#oooooooosoooooooooooo#..',
+    '..##oooooooooooooooooooooo#..',
+    '.#soooooooooooooooooooooooo#.',
+    '#ssooooooooooooooooooooooooo#',
+    '#ssooooooooooooooooooooooooo#',
+    '#ssooooooooooooooooooooooooo#',
+    '#sssooooooooooosssooooooooos#',
+    '.#sssssoooooossssssooooooos#.',
+    '..##ssssssssss####ssssssss#..',
+    '....##########....########...',
+  ],
+  // 小さい
+  [
+    '.......####........',
+    '......#ooss#.......',
+    '.....#soooss###....',
+    '....#soooosssoo#...',
+    '....#sooosooooos#..',
+    '....#ooooooooooo#..',
+    '..##oooooooooooo#..',
+    '.#soooooooooooooo#.',
+    '#ssooooooooooooooo#',
+    '#sssooooosssooooos#',
+    '.#sssssoossssooos#.',
+    '..##sssss###ssss#..',
+    '....#####...####...',
+  ],
+  // 小さい2
+  [
+    '........####.......',
+    '.......#ssoo#......',
+    '....###ssooos#.....',
+    '...#oosssoooos#....',
+    '..#sooooossoos#....',
+    '..#ooooooooooo#....',
+    '..#oooooooooooo##..',
+    '.#oooooooooooooos#.',
+    '#oooooooooooooooss#',
+    '#sooooosssooooosss#',
+    '.#sooosssssosssss#.',
+    '..#ssss####ssss##..',
+    '...####....####....',
+  ],
+  // 低い横長
+  [
+    '.......############.........',
+    '......#ooooooooooss#........',
+    '.....#soooooooooooss####....',
+    '....#soooooooooooosssooo#...',
+    '....#soooooooooossoooooos#..',
+    '....#oooosssssssooooooooo#..',
+    '..##ooooooooooooooooooooo#..',
+    '.#sooooooooooooooooooooooo#.',
+    '#sssooooooooooooosssoooooos#',
+    '.#sssssoossssssssssssoooos#.',
+    '..##ssssssssssss####sssss#..',
+    '....############....#####...',
+  ],
+  // 大きい（2つ重ね）
+  [
+    '.........#########.............',
+    '........#sssssoooo#............',
+    '....####sssssooooos#...........',
+    '...#ooossssssooo######.........',
+    '..#soooooooooss#ooooss#........',
+    '..#ooooooooooo#soooooss####....',
+    '..#oooooooooo#soooooosssooo#...',
+    '.#ooooooooooo#soooossoooooos#..',
+    '#oooooooooooo#oooosooooooooo#..',
+    '#oooooooooo##ooooooooooooooo#..',
+    '#ooooooooo#sooooooooooooooooo#.',
+    '#soooooos#ssoooooooooooooooooo#',
+    '.#sooooss#ssoooooooooooooooooo#',
+    '..#sssss##ssoooooooooooooooooo#',
+    '...#####.#ssoooooooooooooooooo#',
+    '.........#sssooooooosssoooooos#',
+    '..........#sssssoossssssoooos#.',
+    '...........##ssssss####sssss#..',
+    '.............######....#####...',
+  ],
+  // 大（1.5倍）
+  [
+    '..........#########.............',
+    '........##oooooosss#............',
+    '.......#ssooooooosss#...........',
+    '.......#ssooooooosss######......',
+    '......#sooooooooosssssoooo##....',
+    '......#soooooosssoooooooooss#...',
+    '......#soooooosssoooooooooss#...',
+    '.....##oooooosoooooooooooooo#...',
+    '....#ooooooooooooooooooooooo#...',
+    '..###ooooooooooooooooooooooo#...',
+    '.#ssooooooooooooooooooooooooo##.',
+    '#sssooooooooooooooooooooooooooo#',
+    '#sssooooooooooooooooooooooooooo#',
+    '#sssooooooooooooooooooooooooooo#',
+    '#sssooooooooooooooooooooooooooo#',
+    '#sssooooooooooooooooooooooooooo#',
+    '#ssssooooooooooossssoooooooooss#',
+    '.#ssssssssooosssssssssoooooos##.',
+    '.#ssssssssooosssssssssoooooos#..',
+    '..###sssssssss######ssssssss#...',
+    '.....#########......########....',
+  ],
+  // 大（1.5倍・反転・横長）
+  [
+    '.............#############..........',
+    '...........##sssssssoooooo##........',
+    '..........#ssssssssoooooooss#.......',
+    '.....######ssssssssoooooooss#.......',
+    '....#ooooosssssssssooooooooos#......',
+    '...#soooooooooooooosssoooooos#......',
+    '...#soooooooooooooosssoooooos#......',
+    '...#oooooooooooooooooosoooooo##.....',
+    '...#ooooooooooooooooooooooooooo#....',
+    '..##ooooooooooooooooooooooooooo###..',
+    '.#ooooooooooooooooooooooooooooooss#.',
+    '#ooooooooooooooooooooooooooooooosss#',
+    '#ooooooooooooooooooooooooooooooosss#',
+    '#ooooooooooooooooooooooooooooooosss#',
+    '#ooooooooooooooooooooooooooooooosss#',
+    '#ooooooooooooooooooooooooooooooosss#',
+    '#sooooooooosssssssssooooooooooossss#',
+    '.#ssoooooosssssssssssssooossssssss#.',
+    '.#ssoooooosssssssssssssooossssssss#.',
+    '..##sssssss###########sssssssss###..',
+    '....#######...........#########.....',
+  ],
+  // 特大（2倍）
+  [
+    '.................############.............',
+    '................#ssssoooooooo#............',
+    '...............##ssssoooooooo##...........',
+    '..............#ssssooooooooooss#..........',
+    '.......########ssssooooooooooss##.........',
+    '......#oooooossssssooooooooooooss#........',
+    '.....##oooooossssssooooooooooooss#........',
+    '....#ssoooooooooooossssooooooooss#........',
+    '....#ssoooooooooooossssooooooooss#........',
+    '....#oooooooooooooooooossoooooooo#........',
+    '....#oooooooooooooooooossoooooooo##.......',
+    '....#oooooooooooooooooooooooooooooo#......',
+    '...##oooooooooooooooooooooooooooooo####...',
+    '..#ooooooooooooooooooooooooooooooooooss#..',
+    '.##ooooooooooooooooooooooooooooooooooss##.',
+    '#oooooooooooooooooooooooooooooooooooossss#',
+    '#oooooooooooooooooooooooooooooooooooossss#',
+    '#oooooooooooooooooooooooooooooooooooossss#',
+    '#oooooooooooooooooooooooooooooooooooossss#',
+    '#oooooooooooooooooooooooooooooooooooossss#',
+    '#oooooooooooooooooooooooooooooooooooossss#',
+    '#ssoooooooooooossssssoooooooooooooossssss#',
+    '#ssoooooooooooossssssoooooooooooooossssss#',
+    '.##ssoooooooossssssssssssoooossssssssss##.',
+    '..#ssoooooooossssssssssssoooossssssssss#..',
+    '...##ssssssssss########ssssssssssss####...',
+    '....#ssssssssss#......#ssssssssssss#......',
+    '.....##########........############.......',
+  ],
+  // 特大（2倍・横長）
+  [
+    '.............############.......................',
+    '............#oooooooossss#......................',
+    '...........##oooooooossss##.....................',
+    '..........#ssoooooooooossss#....................',
+    '.........##ssoooooooooossss##############.......',
+    '........#ssoooooooooooossssssoooooooooooo#......',
+    '........#ssoooooooooooossssssoooooooooooo##.....',
+    '........#ssoooooooossssooooooooooooooooooss#....',
+    '........#ssoooooooossssooooooooooooooooooss#....',
+    '........#oooooooossoooooooooooooooooooooooo#....',
+    '.......##oooooooossoooooooooooooooooooooooo#....',
+    '......#oooooooooooooooooooooooooooooooooooo#....',
+    '...####oooooooooooooooooooooooooooooooooooo##...',
+    '..#ssoooooooooooooooooooooooooooooooooooooooo#..',
+    '.##ssoooooooooooooooooooooooooooooooooooooooo##.',
+    '#ssssoooooooooooooooooooooooooooooooooooooooooo#',
+    '#ssssoooooooooooooooooooooooooooooooooooooooooo#',
+    '#ssssoooooooooooooooooooooooooooooooooooooooooo#',
+    '#ssssoooooooooooooooooooooooooooooooooooooooooo#',
+    '#ssssoooooooooooooooooooooooooooooooooooooooooo#',
+    '#ssssoooooooooooooooooooooooooooooooooooooooooo#',
+    '#ssssssoooooooooooooossssssooooooooooooooooooss#',
+    '#ssssssoooooooooooooossssssooooooooooooooooooss#',
+    '.##ssssssssssoooossssssssssssooooooooooooooss##.',
+    '..#ssssssssssoooossssssssssssooooooooooooooss#..',
+    '...####ssssssssssss########ssssssssssssssss##...',
+    '......#ssssssssssss#......#ssssssssssssssss#....',
+    '.......############........################.....',
+  ],
+  // 巨大（2倍と1.5倍の重ね）
+  [
+    '.............############.....................................',
+    '............#oooooooossss#....................................',
+    '...........##oooooooossss##...................................',
+    '..........#ssoooooooooossss#..................................',
+    '.........##ssoooooooooossss########...........................',
+    '........#ssoooooooooooossssssoooooo#..........................',
+    '........#ssoooooooooooossssssoooooo##.........................',
+    '........#ssoooooooossssooooooooooooss#........................',
+    '........#ssoooooooossssooooooooooooss#........................',
+    '........#oooooooossoooooooooooooooooo#.....#########..........',
+    '.......##oooooooossoooooooooooooooooo#...##sssoooooo#.........',
+    '......#oooooooooooooooooooooooooooooo#..#sssoooooooos#........',
+    '...####oooooooooooooooooooooooooooo######sssoooooooos##.......',
+    '..#ssooooooooooooooooooooooooooooo#ooooossssoooooooooss#......',
+    '.##ssoooooooooooooooooooooooooooo#sooooooooosssooooooss#......',
+    '#ssssoooooooooooooooooooooooooooo#sooooooooosssooooooss#......',
+    '#ssssoooooooooooooooooooooooooooo#ooooooooooooossoooooo#......',
+    '#ssssoooooooooooooooooooooooooooo#oooooooooooooooooooooo#.....',
+    '#ssssooooooooooooooooooooooooooo##oooooooooooooooooooooo###...',
+    '#ssssoooooooooooooooooooooooooo#oooooooooooooooooooooooooos##.',
+    '#ssssooooooooooooooooooooooooo#ooooooooooooooooooooooooooosss#',
+    '#ssssssoooooooooooooossssssooo#ooooooooooooooooooooooooooosss#',
+    '#ssssssoooooooooooooossssssooo#ooooooooooooooooooooooooooosss#',
+    '.##ssssssssssoooosssssssssssso#ooooooooooooooooooooooooooosss#',
+    '..#ssssssssssoooosssssssssssso#ooooooooooooooooooooooooooosss#',
+    '...####ssssssssssss########sss#sooooooooosssssoooooooooosssss#',
+    '......#ssssssssssss#......#ssss#ssoooooosssssssssooosssssss##.',
+    '.......############........#####ssoooooosssssssssooosssssss#..',
+    '................................##sssssss######sssssssss###...',
+    '..................................#######......#########......',
+  ],
+];
+// 言葉を書く雲（2倍の文字で4文字まで）と、長い言葉（5〜6文字）用
+const LABEL_MAP = [
+  '.............################################.................................',
+  '............#oooooooooooooooooooooooooooossss#................................',
+  '...........##oooooooooooooooooooooooooooossss##...............................',
+  '..........#ssoooooooooooooooooooooooooooooossss#..............................',
+  '.........##ssoooooooooooooooooooooooooooooossss########################.......',
+  '........#ssoooooooooooooooooooooooooooooooossssssoooooooooooooooooooooo#......',
+  '........#ssoooooooooooooooooooooooooooooooossssssoooooooooooooooooooooo##.....',
+  '........#ssoooooooooooooooooooooooooooossssooooooooooooooooooooooooooooss#....',
+  '........#ssoooooooooooooooooooooooooooossssooooooooooooooooooooooooooooss#....',
+  '........#oooooooooooooooooooooooooooossoooooooooooooooooooooooooooooooooo#....',
+  '.......##oooooooooooooooooooooooooooossoooooooooooooooooooooooooooooooooo#....',
+  '......#oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo#....',
+  '...####oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo##...',
+  '..#ssoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo#..',
+  '.##ssoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo##.',
+  '#ssssoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo#',
+  '#ssssoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo#',
+  '#ssssoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo#',
+  '#ssssoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo#',
+  '#ssssoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo#',
+  '#ssssoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo#',
+  '#ssssssoooooooooooooooooooooooooooooooooossssssooooooooooooooooooooooooooooss#',
+  '#ssssssoooooooooooooooooooooooooooooooooossssssooooooooooooooooooooooooooooss#',
+  '.##ssssssssssoooooooooooooooooooooooossssssssssssooooooooooooooooooooooooss##.',
+  '..#ssssssssssoooooooooooooooooooooooossssssssssssooooooooooooooooooooooooss#..',
+  '...####ssssssssssssssssssssssssssssssss########ssssssssssssssssssssssssss##...',
+  '......#ssssssssssssssssssssssssssssssss#......#ssssssssssssssssssssssssss#....',
+  '.......################################........##########################.....',
+];
+const LABEL_WIDE_MAP = [
+  '.............############################################.............................................',
+  '............#oooooooooooooooooooooooooooooooooooooooossss#............................................',
+  '...........##oooooooooooooooooooooooooooooooooooooooossss##...........................................',
+  '..........#ssoooooooooooooooooooooooooooooooooooooooooossss#..........................................',
+  '.........##ssoooooooooooooooooooooooooooooooooooooooooossss####################################.......',
+  '........#ssoooooooooooooooooooooooooooooooooooooooooooossssssoooooooooooooooooooooooooooooooooo#......',
+  '........#ssoooooooooooooooooooooooooooooooooooooooooooossssssoooooooooooooooooooooooooooooooooo##.....',
+  '........#ssoooooooooooooooooooooooooooooooooooooooossssooooooooooooooooooooooooooooooooooooooooss#....',
+  '........#ssoooooooooooooooooooooooooooooooooooooooossssooooooooooooooooooooooooooooooooooooooooss#....',
+  '........#oooooooooooooooooooooooooooooooooooooooossoooooooooooooooooooooooooooooooooooooooooooooo#....',
+  '.......##oooooooooooooooooooooooooooooooooooooooossoooooooooooooooooooooooooooooooooooooooooooooo#....',
+  '......#oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo#....',
+  '...####oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo##...',
+  '..#ssoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo#..',
+  '.##ssoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo##.',
+  '#ssssoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo#',
+  '#ssssoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo#',
+  '#ssssoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo#',
+  '#ssssoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo#',
+  '#ssssoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo#',
+  '#ssssoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo#',
+  '#ssssssoooooooooooooooooooooooooooooooooooooooooooooossssssooooooooooooooooooooooooooooooooooooooooss#',
+  '#ssssssoooooooooooooooooooooooooooooooooooooooooooooossssssooooooooooooooooooooooooooooooooooooooooss#',
+  '.##ssssssssssoooooooooooooooooooooooooooooooooooossssssssssssooooooooooooooooooooooooooooooooooooss##.',
+  '..#ssssssssssoooooooooooooooooooooooooooooooooooossssssssssssooooooooooooooooooooooooooooooooooooss#..',
+  '...####ssssssssssssssssssssssssssssssssssssssssssss########ssssssssssssssssssssssssssssssssssssss##...',
+  '......#ssssssssssssssssssssssssssssssssssssssssssss#......#ssssssssssssssssssssssssssssssssssssss#....',
+  '.......############################################........######################################.....',
+];
+const CELL = 2; // 1マス＝2×2ドット（いただいた絵のような、大きめのドット）
+const CLOUD_COL = { '#': hex('#1b1c22'), o: hex('#ffffff'), s: hex('#dfe6f7') };
+function makeCloud(map) {
+  const c = document.createElement('canvas'); c.width = map[0].length * CELL; c.height = map.length * CELL;
+  const x = c.getContext('2d');
+  map.forEach((row, yy) => [...row].forEach((ch, xx) => {
+    const col = CLOUD_COL[ch]; if (!col) return;
+    x.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; x.fillRect(xx * CELL, yy * CELL, CELL, CELL);
+  }));
+  return c;
+}
+const CLOUDS = CLOUD_MAPS.map(makeCloud);
+const LABEL_CLOUD = makeCloud(LABEL_MAP);
+const LABEL_CLOUD_WIDE = makeCloud(LABEL_WIDE_MAP);
+const LABEL_SCALE = 2; // 雲の上の言葉は、16ドットの字をちょうど2倍に（ドットの形がくずれない）
+function labelCloudFor(text) { return pixText(text, true).img.width * LABEL_SCALE + 28 > LABEL_CLOUD.width ? LABEL_CLOUD_WIDE : LABEL_CLOUD; }
+// どの雲を出すかは、決まった順番で回す（大小がまざるように）
+// 大きさの割合：小 15%（3・4・5）、中 25%（0・1・2・6）、大 35%（7・8）、特大 15%（9・10）、巨大 10%（11）
+const CLOUD_ORDER = [7, 0, 9, 3, 8, 11, 1, 7, 4, 10, 8, 2, 7, 5, 6, 8, 9, 7, 11, 8];
+let cloudTurn = 0;
+
+// ---------------- ドットの文字（白1色＋濃いふち）。同じ文字は作り置く ----------------
+const TEXT_COL = hex('#ffffff'), TEXT_LINE = hex('#141821');
+const INK_COL = hex('#1b1c22'); // 雲の上の言葉の色
+const textCache = new Map();
+function pixText(text, ink = false) {
+  const key = (ink ? 'ink:' : '') + text;
+  if (textCache.has(key)) return textCache.get(key);
+  const m = document.createElement('canvas').getContext('2d');
+  m.font = '16px "DotGothic16", "MS Gothic", monospace';
+  const w = Math.ceil(m.measureText(text).width) + 4, h = 20;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d');
+  x.font = m.font; x.textBaseline = 'top'; x.fillStyle = '#000'; x.fillText(text, 2, 2);
+  const src = x.getImageData(0, 0, w, h).data, on = new Uint8Array(w * h);
+  for (let k = 0; k < w * h; k++) on[k] = src[k * 4 + 3] > 110 ? 1 : 0; // にじみを消して、ドットにする
+  const out = x.createImageData(w, h), d = out.data;
+  for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
+    const k = yy * w + xx;
+    let col = null;
+    if (on[k]) col = ink ? INK_COL : TEXT_COL;
+    else if (ink) col = null; // 黒い字は、ふちなし
+    else {
+      if (!ink) for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        const X = xx + dx, Y = yy + dy;
+        if (X >= 0 && Y >= 0 && X < w && Y < h && on[Y * w + X]) { col = TEXT_LINE; break; }
+      }
+    }
+    if (col) { d[k * 4] = col[0]; d[k * 4 + 1] = col[1]; d[k * 4 + 2] = col[2]; d[k * 4 + 3] = 255; }
+  }
+  x.clearRect(0, 0, w, h); x.putImageData(out, 0, 0);
+  const pts = []; // 崩れる効果に使う、字の点
+  for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) if (on[yy * w + xx]) pts.push([xx - w / 2, yy - h / 2]);
+  const r = { img: c, pts };
+  textCache.set(key, r);
+  return r;
+}
+// 文字を描く。scale は 1・2 など（ドットの形をくずさないよう、そのまま引きのばす）
+// wobble：言葉のまとまり全体が、一度にカクッとふるえる（1秒に16回、場所を変える）
+function drawPix(text, cx, cy, { scale = 1, wobble = 0, t = performance.now(), ink = false } = {}) {
+  if (!text || scale <= 0) return;
+  const { img } = pixText(text, ink);
+  let dx = 0, dy = 0;
+  if (wobble) { const f = Math.floor(t / 62); dx = ((f * 7919) % 3 - 1) * wobble; dy = ((f * 104729) % 3 - 1) * wobble; }
+  const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+  g.drawImage(img, Math.round(cx - w / 2 + dx), Math.round(cy - h / 2 + dy), w, h);
+}
+
+// ---------------- 状態 ----------------
+const st = {
+  game: OVERLAY, // 11/11：アプリでは、画面全体の煙はもう使わない。読みこみの最初から右下の火の子の見せ方にする（起動したとき煙が一瞬出ないように）
+  fillMin: 60, notifiedFull: false,
+  acc: 0.6, exhaling: false, strength: 0.8, source: 'keys', breathStart: 0, breaths: [], lastBreathAt: 0,
+  holdUntil: 0, sessionP: 0, sessionL: 0, poppedIdx: -1,
+  freezeUntil: 0, shake: 0, flash: 0, doneAt: 0, doneMsg: ['', ''], doneStats: '',
+};
+const view = { level: 0, sunPulse: 0, sway: 0, seed: 0 };
+const SUN_Y = Math.round(LH * 0.42); // 太陽が止まる高さ（本体と重ならない）
+const ORIGIN = [LW / 2, LH + 12];
+const puffs = [], pops = [], debris = [], rings = [], stars = [], winds = [], fireworks = [], shots = [];
+const TIP = [LW / 2, LH - 26]; // 本体の先（息が出てくる所）。本体のドット絵は、ここから下に描く
+let tipFlash = 0;
+
+const LABEL_R = LABEL_CLOUD.width / 2;
+// デスクトップでは、画面の端の帯（下 30%・左右 15%・上 12%）にだけ置く
+function edgeSpot(central) {
+  const k = Math.random();
+  if (central || k < 0.45) return [rnd(LW * 0.08, LW * 0.92), rnd(LH * 0.74, LH * 0.94)];
+  if (k < 0.65) return [rnd(LW * 0.02, LW * 0.14), rnd(LH * 0.08, LH * 0.9)];
+  if (k < 0.85) return [rnd(LW * 0.86, LW * 0.98), rnd(LH * 0.08, LH * 0.9)];
+  return [rnd(LW * 0.1, LW * 0.9), rnd(LH * 0.02, LH * 0.1)];
+}
+// 大きくした言葉の雲どうしが重ならない間隔（まん中 → 左上 → 右上 → 左下 → 右下）
+const LABEL_SLOTS = [[0.5, 0.46], [0.25, 0.16], [0.75, 0.16], [0.25, 0.76], [0.75, 0.76]];
+function labelSlot(r = LABEL_R) {
+  for (const [sx, sy] of LABEL_SLOTS) {
+    const x = clamp(LW * sx, r + 4, LW - r - 4), y = LH * sy; // 雲が画面からはみ出さないように
+    if (!puffs.some((p) => p.label && Math.hypot(p.x - x, p.y - y) < LABEL_R)) return [x, y];
+  }
+  return [rnd(LW * 0.25, LW * 0.75), rnd(LH * 0.2, LH * 0.6)];
+}
+function findSpot(r, central) {
+  if (central && OVERLAY) return labelSlot(r);
+  let best = null, bestD = -Infinity;
+  for (let i = 0; i < 24; i++) {
+    let x = central ? clamp(rnd(LW * 0.22, LW * 0.78), r + 4, LW - r - 4) : rnd(10, LW - 10), y = central ? rnd(LH * 0.2, LH * 0.52) : rnd(14, LH * 0.7);
+    if (OVERLAY) [x, y] = edgeSpot(central);
+    let d = 1e9; for (const p of puffs) if (!central || p.label) d = Math.min(d, Math.hypot(p.x - x, p.y - y) - p.r);
+    if (d > bestD) { bestD = d; best = [x, y]; }
+  }
+  return best;
+}
+function addPuff(label = null) {
+  const img = label ? labelCloudFor(label) : CLOUDS[CLOUD_ORDER[cloudTurn++ % CLOUD_ORDER.length]];
+  const r = img.width / 2;
+  const [x, y] = findSpot(label ? r : r * 0.8, !!label);
+  const p = { x, y, r, label, img, born: performance.now() };
+  puffs.push(p); return p;
+}
+function setLabel(p, label) { p.label = label; p.img = labelCloudFor(label); p.r = p.img.width / 2; p.white = null; [p.x, p.y] = findSpot(p.r, true); p.born = performance.now(); }
+
+function chooseToPop() {
+  const alive = puffs.filter((p) => !p.doomed);
+  const labeled = alive.filter((p) => p.label), plain = alive.filter((p) => !p.label);
+  const L = labeled.length, R = alive.length;
+  const spacing = Math.max(1, st.sessionP / Math.max(1, st.sessionL));
+  const d = (p) => Math.hypot(p.x - ORIGIN[0], p.y - ORIGIN[1]);
+  const pick = (arr) => arr.reduce((a, b) => (d(a) < d(b) ? a : b));
+  if (L > 0 && (R <= (L - 1) * spacing + 1 || plain.length === 0)) return pick(labeled);
+  return plain.length ? pick(plain) : null;
+}
+
+// はじける：かたまり全体が一度にふくらんで、白く光って、ばらける
+function pop(p, first) {
+  const i = puffs.indexOf(p); if (i < 0) return;
+  puffs.splice(i, 1);
+  pops.push({ ...p, t: 0 });
+  const now = performance.now();
+  const dx = p.x - ORIGIN[0], dy = p.y - ORIGIN[1], dd = Math.hypot(dx, dy) || 1;
+  if (on('debris')) {
+    const cols = [CLOUD_COL.o, CLOUD_COL.s, CLOUD_COL['#'], CLOUD_COL.o];
+    for (let k = 0; k < (p.label ? 34 : 14); k++) {
+      const a = Math.random() * Math.PI * 2, s = rnd(60, 170);
+      debris.push({ x: p.x + rnd(-p.r, p.r) * 0.6, y: p.y + rnd(-p.r, p.r) * 0.4, vx: Math.cos(a) * s + dx / dd * 60, vy: Math.sin(a) * s * 0.8 + dy / dd * 60 - 40,
+        t: 0, life: rnd(0.35, 0.65), c: cols[k % 4], size: Math.random() < 0.45 ? 3 : 2, grav: 220 });
+    }
+  }
+  rings.push({ x: p.x, y: p.y, t: 0, r0: p.r * 0.7 });
+  if (on('melt') && p.label && st.labelsShown !== false) meltText(p); // 言葉を隠している間は、崩れる文字も出さない
+  if (on('stars')) stars.push({ sx: p.x, sy: p.y, t: 0, dur: rnd(0.5, 0.8) });
+  st.lastPopAt = now;
+  if (first && on('stop')) st.freezeUntil = now + 55;
+  if (on('shake')) st.shake = Math.max(st.shake, p.label ? 3 : 1.2);
+}
+// 言葉がドットに崩れて、ばらばらに飛ぶ
+function meltText(p) {
+  const pts = pixText(p.label, true).pts;
+  const col = INK_COL;
+  for (const [x, y] of pts) {
+    debris.push({ x: p.x + x * LABEL_SCALE, y: p.y + y * LABEL_SCALE, vx: rnd(-40, 40) + x * 3, vy: rnd(-110, -40), t: -rnd(0, 0.2), life: rnd(0.6, 1.0), c: col, size: LABEL_SCALE, grav: 40 });
+  }
+}
+
+function popTo(idx) {
+  if (idx <= st.poppedIdx) return;
+  const N = tracker.flat.length;
+  const remain = st.sessionP - Math.ceil(st.sessionP * (idx + 1) / N);
+  let k = 0;
+  while (puffs.filter((p) => !p.doomed).length > Math.max(0, remain)) {
+    const p = chooseToPop(); if (!p) break;
+    p.doomed = true;
+    const first = k === 0;
+    setTimeout(() => fireShot(p, first), k++ * 45);
+  }
+  st.poppedIdx = idx;
+}
+// 息の玉：本体の先から、消す煙へ飛んでいく。当たった瞬間にはじける
+function fireShot(p, first) {
+  if (!puffs.includes(p)) return;
+  const d = Math.hypot(p.x - TIP[0], p.y - TIP[1]);
+  shots.push({ p, first, t: 0, dur: 0.1 + d / 1600, trail: [] });
+  tipFlash = 1;
+}
+
+// ---------------- 息 ----------------
+function startSessionIfNeeded() {
+  if (st.poppedIdx >= 0 || tracker.progress() > 0) return;
+  if (st.source === 'device') showSign('session'); // 本体で一服を始めたら、席の札を出す
+  st.sessionP = puffs.length; st.sessionL = puffs.filter((p) => p.label).length; st.breaths = [];
+  st.snapshot = puffs.map((p) => ({ x: p.x, y: p.y, img: p.img, label: p.label }));
+}
+function breathStart() {
+  if (st.exhaling) return;
+  if (st.holdUntil) endHold();
+  if (tracker.done && st.source === 'keys') { tracker.reset(); st.poppedIdx = -1; }
+  startSessionIfNeeded();
+  st.exhaling = true; st.breathStart = performance.now(); st.maxDP = 0; st.lastPeak = 0;
+  if (window.shinkokyuApp && window.shinkokyuApp.live) window.shinkokyuApp.live('exhale_start');
+  if (window.shinkokyuApp) window.shinkokyuApp.log('exhale_start', { source: st.source }); // 11/12：吹き始めも記録（吹き終わりが来ないまま、を見分けるため）
+  if (st.msg) dismissMessage(); // 吹き始めたら、知らせの窓は消す
+  if (st.source === 'keys' && !tracker.done) popTo(tracker.idx);
+}
+function breathEnd(seconds) {
+  if (!st.exhaling) return;
+  st.exhaling = false;
+  const t = performance.now(); st.lastBreathAt = t;
+  const sec = seconds ?? (t - st.breathStart) / 1000;
+  if (sec >= 0.5) st.breaths.push(sec);
+  const peak = st.source === 'device' ? Math.round(Math.max(st.lastPeak || 0, st.maxDP || 0)) : undefined; // 息の強さ（圧の山、Pa）。火の子：強すぎると火の粉が散る
+  if (window.shinkokyuApp) window.shinkokyuApp.log('breath', { sec: +sec.toFixed(2), source: st.source, peak });
+  if (window.shinkokyuApp && window.shinkokyuApp.live) window.shinkokyuApp.live('exhale_end', { sec: +sec.toFixed(2) });
+}
+function moyaLine() {
+  if (st.labelsShown === false) return ''; // 言葉を隠している間は、知らせの文にも入れない
+  const labels = (st.snapshot || []).filter((p) => p.label).map((p) => p.label);
+  if (!labels.length) return '';
+  return labels.slice(0, 2).map((l) => `「${l}」`).join('') + 'も、晴れました';
+}
+function sendOff() {
+  const h = new Date().getHours();
+  const list = h < 11 ? [['いい一服でした', 'いってらっしゃい'], ['すっきり、晴れました', 'きょうも ゆっくりいこう']]
+    : h < 17 ? [['すっきり、晴れました', 'つづきも ゆっくりいこう'], ['深呼吸、おつかれさま', '肩の力をぬいて、つづきへ']]
+    : [['おつかれさまです', 'あと少し、ゆっくりいこう'], ['深呼吸、おつかれさま', 'むりせず、つづきへ']];
+  return list[(Math.random() * list.length) | 0];
+}
+function onSongDone() {
+  if (st.holdUntil) return;
+  // 休憩の実験の間は、曲が終わっても演出を出さずに、最初からつづける（3分吹きつづけられるように）
+  if (st.testMode) {
+    if (window.shinkokyuApp) window.shinkokyuApp.log('song_done', { test: true, breaths: st.breaths.map((x) => +x.toFixed(2)) });
+    tracker.reset(); st.poppedIdx = -1; st.breaths = [];
+    for (const d of devices) if (d.connected) d.restart().catch(() => {});
+    return;
+  }
+  [...puffs].forEach((p, i) => { p.doomed = true; setTimeout(() => fireShot(p, false), i * 40); });
+  const b = st.exhaling ? [...st.breaths, (performance.now() - st.breathStart) / 1000] : st.breaths;
+  const k = Math.max(1, Math.min(3, Math.floor(b.length / 2)));
+  const avg = (a) => a.reduce((s, x) => s + x, 0) / a.length;
+  const first = b.length >= 2 ? avg(b.slice(0, k)) : 0, last = b.length >= 2 ? avg(b.slice(-k)) : 0;
+  st.doneStats = b.length >= 2 && last > first + 0.2 ? `息が ${first.toFixed(1)}秒 → ${last.toFixed(1)}秒 にのびました` : '';
+  st.doneMsg = sendOff();
+  st.holdUntil = performance.now() + 12000;
+  st.flash = 1; st.shake = 4; st.doneAt = performance.now();
+  st.lastStats = st.doneStats;
+  if (window.shinkokyuApp) window.shinkokyuApp.log('song_done', { breaths: b.map((x) => +x.toFixed(2)), puffs: st.sessionP, words: st.sessionL });
+  if (OVERLAY) {
+    showMessage([st.doneMsg[0], moyaLine() || st.doneMsg[1], st.doneStats].filter(Boolean), 1200);
+    notify('一服おわり', '押すと、晴れていく様子を早送りで見られます', () => replay());
+  }
+  for (let i = 0; i < 9; i++) setTimeout(() => fireworks.push({ x: rnd(40, LW - 40), y: rnd(25, LH * 0.55), t: 0, c: ['#ffd36e', '#7ef0a8', '#ff8fb1', '#8fd3ff'][i % 4] }), 200 + i * 160);
+  st.acc = 0;
+}
+function endHold() { st.holdUntil = 0; view.seed = 0; st.poppedIdx = -1; if (tracker.done && st.source === 'keys') tracker.reset(); exitKeyMode(); }
+
+// スペースキーで吹く（11/11）：操作パネルでスペースキーを押している間＝吹いている。息の代わり（発表・ためし用）
+// 本体がつながっていても使える：押した一服（1曲）だけ、本体の代わりにキーで曲を進める（本体の息・曲の進みは見ない。本体の音は鳴らない）。
+// 曲が終わる（または 90秒吹かずに一服をやめる）と、本体に戻して、本体の曲を最初からにする
+function keyBreath(on) {
+  if (!on) { if (st.keyHeld) { st.keyHeld = false; breathEnd(); } return; }
+  if (st.keyHeld || st.exhaling) return; // 本体で吹いている途中は、そのまま
+  if (st.holdUntil) endHold();
+  if (st.source === 'device') { st.keyMode = true; st.source = 'keys'; }
+  st.keyHeld = true; st.strength = 0.8;
+  breathStart();
+}
+function exitKeyMode() {
+  if (!st.keyMode) return;
+  st.keyMode = false; st.keyHeld = false;
+  st.source = devices.some((d) => d.connected) ? 'device' : 'keys';
+  tracker.reset(); st.poppedIdx = -1;
+  for (const d of devices) if (d.connected) d.restart().catch(() => {});
+}
+
+// 吹きかけてやめた一服：90秒吹かなければ終わりにする（曲は最初に戻す）。ずっと「一服中」のままにしない（11/07）
+// 煙を隠している間は毎こまの処理が止まるので、1秒ごとのタイマーで見る
+setInterval(() => {
+  const t = performance.now();
+  // 吹いている途中で本体が切れた：吹き終わりが届かないので、ここで終える
+  if (st.exhaling && st.source === 'device' && !st.keyHeld && !devices.some((d) => d.connected)) breathEnd();
+  const inSession = st.poppedIdx >= 0 || st.exhaling;
+  if (inSession && !st.exhaling && !st.holdUntil && !st.testMode && t - Math.max(st.lastBreathAt, st.breathStart) > 90000) {
+    tracker.reset(); st.poppedIdx = -1; st.breaths = [];
+    for (const d of devices) if (d.connected) d.restart().catch(() => {});
+    exitKeyMode();
+    if (window.shinkokyuApp) window.shinkokyuApp.log('session_abandon', {});
+  }
+}, 1000);
+
+// ---------------- 毎こま ----------------
+let lastT = performance.now();
+function frame(t) {
+  const dt = Math.min(0.1, (t - lastT) / 1000); lastT = t;
+  const frozen = t < st.freezeUntil;
+  const inSession = st.poppedIdx >= 0 || st.exhaling;
+  if (!inSession && !st.holdUntil && t - st.lastBreathAt > 20000) st.acc = Math.min(1, st.acc + dt / (st.fillMin * 60));
+  if (!inSession && !st.holdUntil && puffs.length < Math.round(MAXP() * st.acc) && t - (st.lastSpawn || 0) > 45) { addPuff(); st.lastSpawn = t; }
+  if (st.holdUntil && t > st.holdUntil) endHold();
+
+  const ev = tracker.advance(dt, st.exhaling, st.source === 'keys');
+  if (ev === 'note') popTo(tracker.idx);
+  if (ev === 'done') onSongDone();
+
+  // 晴れ具合の段：上がった瞬間に、画面全体が一度に明るくなる（小さく光る）
+  const level = Math.round((1 - puffs.length / MAXP()) * STEPS);
+  if (level > view.level) st.flash = Math.max(st.flash, 0.35);
+  view.level = level;
+  view.sunPulse = approach(view.sunPulse, 0, 6, dt);
+  st.shake = approach(st.shake, 0, 9, dt);
+  st.flash = approach(st.flash, 0, 8, dt);
+
+  if (!frozen) {
+    view.sway += dt;
+    // 吹いている間は、煙のかたまりがまるごと、息の入る所から押しやられる（なめらかに）
+    if (st.exhaling && !OVERLAY) for (const p of puffs) {
+      if (p.label) continue;
+      const dx = p.x - ORIGIN[0], dy = p.y - ORIGIN[1], d = Math.hypot(dx, dy) || 1;
+      p.x = clamp(p.x + dx / d * 6 * st.strength * dt, 6, LW - 6); p.y = clamp(p.y + dy / d * 6 * st.strength * dt, 8, LH * 0.78);
+    }
+    for (const p of pops) p.t += dt;
+    for (const d of debris) { d.t += dt; if (d.t > 0) { d.x += d.vx * dt; d.y += d.vy * dt; d.vy += d.grav * dt; d.vx *= 0.97; } }
+    for (const r of rings) r.t += dt;
+    for (const s of stars) s.t += dt;
+    for (const w of winds) { w.x += w.vx * dt; w.y += w.vy * dt; w.t += dt; }
+    for (const sh of shots) sh.t += dt;
+    for (const f of fireworks) f.t += dt;
+  }
+  for (let i = pops.length - 1; i >= 0; i--) if (pops[i].t > 0.09) pops.splice(i, 1);
+  for (let i = debris.length - 1; i >= 0; i--) if (debris[i].t > debris[i].life) debris.splice(i, 1);
+  for (let i = rings.length - 1; i >= 0; i--) if (rings[i].t > 0.25) rings.splice(i, 1);
+  for (let i = stars.length - 1; i >= 0; i--) if (stars[i].t > stars[i].dur) { stars.splice(i, 1); view.sunPulse = 1; view.seed++; }
+  for (let i = winds.length - 1; i >= 0; i--) if (winds[i].y < -20 || winds[i].t > 0.7) winds.splice(i, 1);
+  for (let i = shots.length - 1; i >= 0; i--) if (shots[i].t >= shots[i].dur) { const sh = shots[i]; shots.splice(i, 1); pop(sh.p, sh.first); }
+  tipFlash = approach(tipFlash, 0, 14, dt);
+  for (let i = fireworks.length - 1; i >= 0; i--) if (fireworks[i].t > 1.2) fireworks.splice(i, 1);
+  if (st.exhaling && !st.holdUntil) for (let i = 0; i < 1 + st.strength * 2; i++) if (Math.random() < 0.6) {
+    const a = -Math.PI / 2 + rnd(-0.45, 0.45), v = rnd(170, 300) * (0.5 + st.strength);
+    winds.push({ x: TIP[0] + rnd(-2, 2), y: TIP[1] - 2, vx: Math.cos(a) * v, vy: Math.sin(a) * v, len: (rnd(4, 11)) | 0, t: 0 });
+  }
+
+  if (st.game) { g.clearRect(0, 0, LW, LH); drawSign(t); if (st.voice) drawBox(st.voice, LW / 2, LH - 30); } // ゲームの見せ方：煙は描かず、席の札と声の知らせだけ
+  else { draw(t); drawTexts(t); }
+  requestAnimationFrame(frame);
+}
+
+// 煙の群れ全体のゆれ（みんな一緒に、ゆっくり）
+function swayOffset() { return [Math.sin(view.sway * 0.35) * 5, Math.sin(view.sway * 0.5) * 2]; }
+
+function draw(t) {
+  const lv = on('mono') ? view.level : STEPS; // 色を戻す効果を切ると、空だけが晴れていく
+  if (OVERLAY) g.clearRect(0, 0, LW, LH); else g.putImageData(SKIES[Math.min(STEPS, view.level)], 0, 0);
+  const sx = Math.round(st.shake * (Math.random() * 2 - 1)), sy = Math.round(st.shake * (Math.random() * 2 - 1));
+  g.save(); g.translate(sx, sy);
+
+  // 太陽：吹いている間は出さない。曲を吹き終えたら、下からピュッと飛び出して、画面の中ほどで止まる
+  const sunK = st.holdUntil && !OVERLAY ? clamp((t - st.doneAt - 350) / 420, 0, 1) : 0; // 透明な画面では太陽を出さない
+  const sunY = Math.round(LH + 30 + (SUN_Y - LH - 30) * easeOutBack(sunK)), sunR = 17;
+  if (sunK > 0) {
+    g.fillStyle = '#ffe9a8';
+    const rayK = clamp((t - st.doneAt - 700) / 500, 0, 1);
+    for (let k = 0; k < 12; k++) {
+      const a = k * Math.PI / 6 + t / 4000;
+      for (let r = sunR + 5; r < sunR + 5 + rayK * 40; r += 3) g.fillRect(Math.round(LW / 2 + Math.cos(a) * r), Math.round(sunY + Math.sin(a) * r), 1, 1);
+    }
+    pixCircleFill(LW / 2, sunY, sunR + 2, '#ffcf6b'); pixCircleFill(LW / 2, sunY, sunR, '#fff2c4');
+  } else if (view.seed > 0 && !OVERLAY) {
+    // 光の粒が集まったところ：太陽が出てくる場所で、小さくきらめく
+    const r = Math.min(4, 1 + Math.floor(view.seed / 12)) + Math.round(view.sunPulse);
+    g.fillStyle = Math.floor(t / 160) % 2 ? '#fff6c8' : '#ffe08a';
+    g.fillRect(LW / 2 - r, SUN_Y, r * 2 + 1, 1); g.fillRect(LW / 2, SUN_Y - r, 1, r * 2 + 1);
+    g.fillRect(LW / 2 - 1, SUN_Y - 1, 3, 3);
+  }
+  // 息の風：本体の先から扇形に吹き出す
+  g.fillStyle = '#dfe8ff';
+  for (const w of winds) { const sp = Math.hypot(w.vx, w.vy); for (let k = 0; k < w.len; k++) g.fillRect(Math.round(w.x - w.vx / sp * k), Math.round(w.y - w.vy / sp * k), 1, 1); }
+
+  // 煙のかたまり：群れ全体で一緒にゆれる。出てくるときは、まるごとポンとふくらむ
+  const [ox, oy] = swayOffset();
+  // 大きい雲を奥、小さい雲を手前に。言葉の付いた雲はいちばん手前
+  const sorted = [...puffs].sort((a, b) => (!!a.label - !!b.label) || (b.img.width - a.img.width) || a.y - b.y);
+  for (const p of sorted) drawPuff(p, ox, oy, Math.min(1.15, easeOutBack(clamp((t - p.born) / 280, 0, 1))));
+  for (const p of pops) { const k = p.t / 0.09; drawPuff(p, ox, oy, 1 + 0.3 * k, true); }
+  for (const sh of shots) {
+    const k = clamp(sh.t / sh.dur, 0, 1), e = 1 - (1 - k) * (1 - k);
+    const x = Math.round(TIP[0] + (sh.p.x + ox - TIP[0]) * e), y = Math.round(TIP[1] + (sh.p.y + oy - TIP[1]) * e);
+    sh.trail.push([x, y]); if (sh.trail.length > 5) sh.trail.shift();
+    sh.trail.forEach(([tx, ty], i) => { g.fillStyle = i < 2 ? '#7fc8ff' : '#cfeeff'; g.fillRect(tx - 1, ty - 1, 2, 2); });
+    g.fillStyle = '#ffffff'; g.fillRect(x - 2, y - 1, 5, 3); g.fillRect(x - 1, y - 2, 3, 5);
+    g.fillStyle = '#8fdcff'; g.fillRect(x, y, 1, 1);
+  }
+  for (const r of rings) pixCircle(r.x + ox, r.y + oy, Math.round(r.r0 + (r.t < 0.12 ? 4 : 10)), r.t < 0.12 ? '#ffffff' : '#c2c9d6');
+  for (const p of debris) { if (p.t < 0) continue; const c = p.c; g.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`; g.fillRect(Math.round(p.x + ox), Math.round(p.y + oy), p.size, p.size); }
+  for (const s of stars) {
+    const k = clamp(s.t / s.dur, 0, 1), e = k * k * (3 - 2 * k);
+    const x = s.sx + ox + (LW / 2 - s.sx - ox) * e, y = s.sy + oy + (SUN_Y - s.sy - oy) * e - Math.sin(k * Math.PI) * 20;
+    g.fillStyle = '#fff6c8'; g.fillRect(Math.round(x) - 1, Math.round(y), 3, 1); g.fillRect(Math.round(x), Math.round(y) - 1, 1, 3);
+  }
+  for (const f of fireworks) {
+    const k = f.t / 1.2;
+    for (let a = 0; a < 16; a++) {
+      const ang = a * Math.PI / 8, r = 4 + k * 26;
+      g.fillStyle = f.c; g.fillRect(Math.round(f.x + Math.cos(ang) * r), Math.round(f.y + Math.sin(ang) * r + k * k * 8), 2, 2);
+    }
+  }
+  g.restore();
+
+  // 曇りは白黒、晴れるほど色が戻る：段が上がるたびに、画面全体が一度に色づく
+  if (on('mono') && lv < STEPS) {
+    const s = lv / STEPS, im = g.getImageData(0, 0, LW, LH), q = im.data;
+    for (let o = 0; o < q.length; o += 4) {
+      const l = (q[o] * 0.3 + q[o + 1] * 0.59 + q[o + 2] * 0.11) / 256;
+      const c = MONO[monoIndex(l)];
+      q[o] = c[0] + (q[o] - c[0]) * s; q[o + 1] = c[1] + (q[o + 1] - c[1]) * s; q[o + 2] = c[2] + (q[o + 2] - c[2]) * s;
+    }
+    g.putImageData(im, 0, 0);
+  }
+  if (st.flash > 0.03 && !OVERLAY) { g.fillStyle = `rgba(255,255,255,${Math.min(0.85, st.flash)})`; g.fillRect(0, 0, LW, LH); }
+
+  // 息のゲージ（ドット）
+  if (st.exhaling && !st.holdUntil && on('gauge')) {
+    const s = (t - st.breathStart) / 1000, cells = 24, w = 3, x0 = TIP[0] + 22, y0 = LH - 9;
+    for (let i = 0; i < cells; i++) { g.fillStyle = s >= (i + 1) * 0.5 ? (i < 8 ? '#7ef0a8' : i < 16 ? '#ffd36e' : '#ff8fb1') : '#2a303c'; g.fillRect(x0 + i * (w + 1), y0, w, 4); }
+  }
+  if (OVERLAY) return; // デスクトップでは、たまり具合は通知領域のアイコンで見せる
+  const filled = Math.round(10 * puffs.length / MAXP());
+  for (let i = 0; i < 10; i++) { g.fillStyle = i < filled ? '#c2c9d6' : '#2a303c'; g.fillRect(6 + i * 5, 6, 4, 4); }
+}
+
+function drawPuff(p, ox, oy, scale, white) {
+  const w = Math.round(p.img.width * scale), h = Math.round(p.img.height * scale);
+  const x = Math.round(p.x + ox - w / 2), y = Math.round(p.y + oy - h / 2);
+  g.drawImage(white ? whiteOf(p) : p.img, x, y, w, h);
+}
+// はじける瞬間の、まっ白な形（かたまりごと光る）
+function whiteOf(p) {
+  if (p.white) return p.white;
+  const c = document.createElement('canvas'); c.width = p.img.width; c.height = p.img.height;
+  const x = c.getContext('2d'); x.drawImage(p.img, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = '#ffffff'; x.fillRect(0, 0, c.width, c.height);
+  p.white = c; return c;
+}
+function pixCircle(cx, cy, r, color) {
+  g.fillStyle = color;
+  const n = Math.max(12, Math.round(r * 6));
+  for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2; g.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r), 1, 1); }
+}
+function pixCircleFill(cx, cy, r, color) {
+  g.fillStyle = color;
+  for (let y = -r; y <= r; y++) { const w = Math.round(Math.sqrt(r * r - y * y)); g.fillRect(Math.round(cx - w), Math.round(cy + y), w * 2 + 1, 1); }
+}
+
+// ---------------- 本体（ドット絵）：下のまん中。吹いている間は先が光り、息の玉を撃つと一瞬まぶしくなる ----------------
+function drawDevice(t) {
+  const x = TIP[0] - 4, y = TIP[1];
+  g.fillStyle = '#11141b'; g.fillRect(x - 1, y - 1, 10, LH - y + 1);                // ふち
+  g.fillStyle = '#3a4150'; g.fillRect(x, y + 3, 8, LH - y);                          // 筒
+  g.fillStyle = '#5a6478'; g.fillRect(x + 2, y + 4, 1, LH - y);                      // 光の当たる線
+  g.fillStyle = '#8a94a8'; g.fillRect(x, y + 9, 8, 2);                               // 回すリング
+  const lit = st.exhaling && !st.holdUntil;
+  g.fillStyle = lit ? '#d9f4ff' : '#6d7889'; g.fillRect(x, y, 8, 3);                // 先
+  if (lit) {
+    const r = 4 + (Math.floor(t / 120) % 2) + Math.round(tipFlash * 3);
+    pixCircle(TIP[0], TIP[1], r, '#9fdcff');
+    if (tipFlash > 0.3) { g.fillStyle = '#ffffff'; g.fillRect(TIP[0] - 3, TIP[1] - 1, 7, 1); g.fillRect(TIP[0], TIP[1] - 4, 1, 7); }
+  }
+}
+
+// ---------------- 文字（ドット・白1色） ----------------
+function drawTexts(t) {
+  const [ox, oy] = swayOffset();
+  // 煙の上の言葉：煙と一緒に動く。吹いている間は、言葉ごとふるえる
+  for (const p of puffs) {
+    if (!p.label || st.labelsShown === false) continue; // 席にいないとき（札が出ているなど）は、言葉を描かない（まわりの人が画面を見るので）
+    const pop = Math.min(1.15, easeOutBack(clamp((t - p.born) / 280, 0, 1)));
+    drawPix(p.label, p.x + ox, p.y + oy, { scale: LABEL_SCALE * pop, wobble: t - st.lastPopAt < 160 ? 1 : 0, t, ink: true }); // 煙がはじけた瞬間だけ、言葉ごとふるえる
+  }
+  if (!OVERLAY || (st.exhaling && !st.holdUntil)) drawDevice(t); // デスクトップでは、吹いている間だけ本体を出す
+  if (st.exhaling && !st.holdUntil) {
+    const sec = ((t - st.breathStart) / 1000).toFixed(1);
+    if (OVERLAY) drawBox([sec + ' 秒'], TIP[0] + 52, TIP[1] - 6); // 透明な画面では、窓に入れて読みやすく
+    else drawPix(sec, TIP[0] + 60, TIP[1] - 8, { scale: 2 }); // 吹いている間の秒数
+  } else if (!st.holdUntil && puffs.length && !OVERLAY) {
+    drawPix('本体に 息を ふきこもう', LW / 2, LH - 46, { wobble: t % 2400 < 250 ? 1 : 0, t }); // 普段は止まっていて、2.4秒に1回だけカクッとふるえる
+  }
+  drawReplay(t);
+  drawSign(t);
+  if (st.voice) drawBox(st.voice, LW / 2, LH - 30); // 声：聞いています／ことばにしています
+  drawMessage(t);
+  // 1曲おわり：作業に戻る人を送り出す言葉（クリアや点数ではない。ゲームではないので）。透明な画面ではメッセージの窓で出す
+  if (st.holdUntil && !OVERLAY) {
+    const k = (t - st.doneAt) / 1000;
+    if (k > 0.4) drawPix(st.doneMsg[0], LW / 2, 44, { scale: 2 * easeOutBack(clamp((k - 0.4) / 0.35, 0, 1)), wobble: k < 0.9 ? 1 : 0, t });
+    if (k > 1.1) drawPix(st.doneMsg[1], LW / 2, 140, { scale: easeOutBack(clamp((k - 1.1) / 0.35, 0, 1)), t });
+    if (k > 1.8 && st.doneStats) drawPix(st.doneStats, LW / 2, 160, { scale: easeOutBack(clamp((k - 1.8) / 0.35, 0, 1)), t });
+  }
+}
+
+// ---------------- メッセージの窓（レトロなゲームの、黒い箱＋白い枠）。透明な画面で、どんな壁紙の上でも読めるように ----------------
+// 自分で消える（10秒）。押す・作業を始める・通知を押す、でも消える
+const BOX_PAD = 6, LINE_H = 18;
+function boxRect(lines, cx, cy) {
+  const w = Math.max(...lines.map((l) => pixText(l).img.width)) + BOX_PAD * 2, h = lines.length * LINE_H + BOX_PAD * 2 - 2;
+  return { x: Math.round(cx - w / 2), y: Math.round(cy - h / 2), w, h };
+}
+function drawBox(lines, cx, cy) {
+  const r = boxRect(lines, cx, cy);
+  g.fillStyle = 'rgba(11,13,18,0.92)'; g.fillRect(r.x, r.y, r.w, r.h);
+  g.fillStyle = '#f2f4f8';
+  g.fillRect(r.x, r.y, r.w, 1); g.fillRect(r.x, r.y + r.h - 1, r.w, 1); g.fillRect(r.x, r.y, 1, r.h); g.fillRect(r.x + r.w - 1, r.y, 1, r.h);
+  g.fillRect(r.x + 2, r.y + 2, r.w - 4, 1); g.fillRect(r.x + 2, r.y + r.h - 3, r.w - 4, 1); g.fillRect(r.x + 2, r.y + 2, 1, r.h - 4); g.fillRect(r.x + r.w - 3, r.y + 2, 1, r.h - 4);
+  lines.forEach((l, i) => {
+    const y = r.y + BOX_PAD + i * LINE_H + 8;
+    drawPix(l, cx, y);
+    if (l === CLOSE_LABEL) { // ボタンの枠
+      const w = pixText(l).img.width + 6;
+      g.fillStyle = '#f2f4f8';
+      const bx = Math.round(cx - w / 2), by = Math.round(y - 10);
+      g.fillRect(bx, by, w, 1); g.fillRect(bx, by + 19, w, 1); g.fillRect(bx, by, 1, 20); g.fillRect(bx + w - 1, by, 1, 20);
+    }
+  });
+  return r;
+}
+const CLOSE_LABEL = 'とじる';
+st.msg = null;
+// ---------------- 席の札「シン呼吸中」 ----------------
+// 喫煙者の空いた席は「タバコかな」で通るが、吸わない人の空いた席はサボりに見える。席を外している間、画面に札を出して埋める
+// 出す：一服（吹き始め）・操作パネルの「一服に行く」。おろす：戻って PC にさわった・PC の前で吹き終わった・操作パネル・30分たった
+st.sign = null;
+// 11/11：画面に大きく出る札はもう使わない。どのきっかけ（吹き始め・操作パネル・メニュー）でも出さない
+const SIGN_ENABLED = false;
+function showSign(via) {
+  if (!SIGN_ENABLED || !OVERLAY || st.testMode || st.sign) return;
+  st.sign = { since: Date.now(), via };
+  if (window.shinkokyuApp) window.shinkokyuApp.log('sign_on', { via });
+}
+function hideSign(why) {
+  if (!st.sign) return;
+  if (window.shinkokyuApp) window.shinkokyuApp.log('sign_off', { via: st.sign.via, why, sec: Math.round((Date.now() - st.sign.since) / 1000) });
+  st.sign = null;
+}
+function drawSign(t) {
+  if (!st.sign || st.msg) return; // 知らせの窓が出ている間は、そちらを先に
+  if (st.testMode || Date.now() - st.sign.since > 30 * 60000) { hideSign(st.testMode ? 'test' : 'timeout'); return; }
+  const min = Math.floor((Date.now() - st.sign.since) / 60000);
+  const sub = ['一服しています', '3分ほどで もどります', min >= 1 ? `${min}分まえから` : 'いま 一服を はじめました'];
+  const TS = 3, title = 'シン呼吸中', th = 16 * TS;
+  const w = Math.max(pixText(title).img.width * TS, ...sub.map((l) => pixText(l).img.width)) + 28;
+  const h = th + sub.length * LINE_H + 30;
+  const x = Math.round(LW / 2 - w / 2), y = Math.round(LH * 0.42 - h / 2);
+  g.fillStyle = 'rgba(11,13,18,0.92)'; g.fillRect(x, y, w, h);
+  g.fillStyle = '#f2f4f8';
+  g.fillRect(x, y, w, 1); g.fillRect(x, y + h - 1, w, 1); g.fillRect(x, y, 1, h); g.fillRect(x + w - 1, y, 1, h);
+  g.fillRect(x + 2, y + 2, w - 4, 1); g.fillRect(x + 2, y + h - 3, w - 4, 1); g.fillRect(x + 2, y + 2, 1, h - 4); g.fillRect(x + w - 3, y + 2, 1, h - 4);
+  drawPix(title, LW / 2, y + 12 + th / 2, { scale: TS, wobble: t % 3000 < 200 ? 1 : 0, t }); // 3秒に1回だけ、カクッとふるえる
+  sub.forEach((l, i) => drawPix(l, LW / 2, y + 22 + th + i * LINE_H + 6));
+}
+function showMessage(lines, delay = 0, life = 10000) {
+  if (st.game) return; // ゲームの見せ方では、知らせはアプリの右の吹き出しで出す
+  const at = performance.now() + delay;
+  st.msg = { lines: [...lines, CLOSE_LABEL], at, until: at + life };
+}
+function dismissMessage() { st.msg = null; sendMsgRect(null); }
+function drawMessage(t) {
+  if (!st.msg) return;
+  if (t > st.msg.until) { dismissMessage(); return; }
+  if (t < st.msg.at) return;
+  const k = clamp((t - st.msg.at) / 250, 0, 1);
+  if (k < 1 && Math.floor(t / 60) % 2) return; // 出てくるときは、まるごと点滅
+  st.msg.rect = drawBox(st.msg.lines, LW / 2, LH * 0.42);
+  sendMsgRect(st.msg.rect);
+}
+// 窓の場所（画面のピクセル）をアプリに知らせる。アプリはマウスの位置を見て、窓の上のときだけ押せるようにする
+// （ほかの所は、クリックが下の画面に素通りのまま）
+let lastRectKey = '';
+function sendMsgRect(r) {
+  if (!window.shinkokyuApp) return;
+  const sr = r ? { x: Math.round(r.x * innerWidth / LW), y: Math.round(r.y * innerHeight / LH), w: Math.round(r.w * innerWidth / LW), h: Math.round(r.h * innerHeight / LH) } : null;
+  const key = JSON.stringify(sr);
+  if (key !== lastRectKey) { lastRectKey = key; window.shinkokyuApp.msgRect(sr); }
+}
+for (const ev of ['mousedown', 'pointerdown', 'click']) addEventListener(ev, () => { if (OVERLAY && st.msg) { console.info('[shinkokyu] 窓を押した：' + ev); dismissMessage(); } });
+
+// ---------------- 早送り：吹き終わったあと、全部の煙がスーッと消えていく様子を見せる（実際の吹き方には合わせない） ----------------
+st.replay = null;
+function replay() {
+  const items = st.snapshot && st.snapshot.length ? st.snapshot.map((p) => ({ ...p })) : [];
+  if (!items.length) { // 覚えている煙がなければ、いっぱいの形をその場で作る
+    for (let i = 0; i < MAXP(); i++) {
+      const img = CLOUDS[CLOUD_ORDER[i % CLOUD_ORDER.length]];
+      const [x, y] = OVERLAY ? edgeSpot(false) : [rnd(10, LW - 10), rnd(14, LH * 0.7)];
+      items.push({ x, y, img, label: null });
+    }
+  }
+  const dmax = Math.max(...items.map((p) => Math.hypot(p.x - ORIGIN[0], p.y - ORIGIN[1])));
+  // 息の入る所から近い順に、なめらかに消していく（全部で約5秒）
+  const its = items.map((p) => ({ ...p, start: 600 + 4400 * Math.pow(Math.hypot(p.x - ORIGIN[0], p.y - ORIGIN[1]) / dmax, 1.3) }));
+  // 打ち込んだ言葉（もやもや）の雲は、最後に1つずつ消す
+  let last = Math.max(600, ...its.filter((p) => !p.label).map((p) => p.start));
+  its.filter((p) => p.label).forEach((p) => { last += 450; p.start = last; });
+  st.replay = { t0: performance.now(), items: its };
+  dismissMessage();
+}
+function drawReplay(t) {
+  if (!st.replay) return;
+  const e = t - st.replay.t0;
+  let alive = 0;
+  for (const p of st.replay.items) {
+    const k = clamp((e - p.start) / 700, 0, 1); // 0：まだ、1：消えた
+    if (k >= 1) continue;
+    alive++;
+    const dx = p.x - ORIGIN[0], dy = p.y - ORIGIN[1], d = Math.hypot(dx, dy) || 1;
+    const push = k * k * 30, a = Math.round((1 - k) * 4) / 4; // 外へ流れながら、4段で薄くなる
+    if (a <= 0) continue;
+    g.globalAlpha = Math.min(1, e / 300) * a;
+    g.drawImage(p.img, Math.round(p.x + dx / d * push - p.img.width / 2), Math.round(p.y + dy / d * push - p.img.height / 2));
+    g.globalAlpha = 1;
+    if (p.label && k < 0.5 && st.labelsShown !== false) drawPix(p.label, p.x + dx / d * push, p.y + dy / d * push, { ink: true, scale: LABEL_SCALE });
+  }
+  if (!alive && e > 1000) {
+    st.replay = null;
+    showMessage(['おかえりなさい', moyaLine() || 'すっきり、晴れました', st.lastStats].filter(Boolean), 200);
+  }
+}
+
+// ---------------- キー ----------------
+addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space') { e.preventDefault(); if (!e.repeat && st.source === 'keys') { st.strength = 0.8; breathStart(); } return; }
+  if (e.code === 'KeyF') { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); return; }
+  if (e.code === 'KeyH') { toggleHelp(); return; }
+  const f = FX.find((x) => x.key === e.key);
+  if (f) { f.on = !f.on; renderFxList(); toast(`${f.key}：${f.name} ${f.on ? '入' : '切'}`); }
+});
+addEventListener('keyup', (e) => { if (e.code === 'Space' && st.source === 'keys') breathEnd(); });
+
+// ---------------- 本体 ----------------
+const devices = [];
+
+// ---------------- 11/13：PC からも音を出す（2人で1つの曲） ----------------
+// PC で鳴らす音は1つ。どちらかの台が吸っている間だけ、同じ曲が1つ進む（2人で1曲を進める）。だれも吸っていないと止まり、次に吸うと続きから。
+// 曲の最後まで行ったら、みんなが息を止めるのを待って、次の息で最初から。息の強さ（st.strength）で大きさを変える。本体の音は今までどおり（台ごと）
+// どの台が吸っているときに何音進んだかを、5秒ごとに記録する（確かめ用）
+const pcSound = { on: false, wantOn: false, vol: 0.6, ctx: null, master: null, voices: new Map(), counts: {} };
+const PC_TIMBRES = [
+  { name: '笛', harm: [0, 1, 0.35, 0.15, 0.06], pan: 0, oct: 0, vib: 10 },
+  { name: 'オカリナ', harm: [0, 1, 0.05, 0.22, 0.02, 0.07], pan: 0, oct: 0, vib: 18 },
+];
+function pcCtx() {
+  if (!pcSound.ctx) {
+    const C = new AudioContext();
+    const m = C.createGain(); m.gain.value = pcSound.vol;
+    const comp = C.createDynamicsCompressor(); // 割れないように
+    m.connect(comp); comp.connect(C.destination);
+    pcSound.ctx = C; pcSound.master = m;
+  }
+  if (pcSound.ctx.state === 'suspended') pcSound.ctx.resume().catch(() => {});
+  return pcSound.ctx;
+}
+function pcVoice(key, idx) {
+  let v = pcSound.voices.get(key);
+  if (v) return v;
+  const C = pcCtx(), tb = PC_TIMBRES[idx % PC_TIMBRES.length];
+  const osc = C.createOscillator();
+  osc.setPeriodicWave(C.createPeriodicWave(new Float32Array(tb.harm.length), new Float32Array(tb.harm)));
+  const g = C.createGain(); g.gain.value = 0;
+  const pan = C.createStereoPanner(); pan.pan.value = tb.pan;
+  const lfo = C.createOscillator(); lfo.frequency.value = 5;
+  const lg = C.createGain(); lg.gain.value = 0;
+  lfo.connect(lg); lg.connect(osc.detune);
+  osc.connect(g); g.connect(pan); pan.connect(pcSound.master);
+  osc.start(); lfo.start();
+  v = { osc, g, lg, tb, idx, playing: false, level: 0.7 };
+  pcSound.voices.set(key, v);
+  return v;
+}
+function pcPlay(v, midi, label) {
+  const C = pcSound.ctx, t = C.currentTime;
+  if (midi > 0) {
+    const g = 0.32 * v.level;
+    v.osc.frequency.setTargetAtTime(440 * Math.pow(2, (midi + v.tb.oct - 69) / 12), t, v.playing ? 0.015 : 0.001);
+    v.g.gain.cancelScheduledValues(t);
+    if (v.playing) { v.g.gain.setValueAtTime(g * 0.35, t); v.g.gain.setTargetAtTime(g, t + 0.03, 0.02); } // 同じ高さが続くときも、音の区切りが分かるように
+    else v.g.gain.setTargetAtTime(g, t, 0.02);
+    v.lg.gain.cancelScheduledValues(t); v.lg.gain.setValueAtTime(0, t); v.lg.gain.linearRampToValueAtTime(v.tb.vib, t + 0.4);
+    v.playing = true;
+    if (label) pcSound.counts[label] = (pcSound.counts[label] || 0) + 1;
+  } else {
+    v.g.gain.cancelScheduledValues(t); v.g.gain.setTargetAtTime(0, t, 0.05);
+    v.playing = false;
+  }
+}
+function pcSilence() { if (!pcSound.ctx) return; for (const v of pcSound.voices.values()) if (v.playing) pcPlay(v, 0); }
+function setPcSound(on, vol) {
+  if (window.shinkokyuApp) window.shinkokyuApp.log('pc_sound_state', { on: !!on, vol }); // 11/15：ページが PC の音の設定を受けとったしるし
+  pcSound.on = !!on; pcSound.wantOn = !!on;
+  if (Number.isFinite(vol)) pcSound.vol = clamp(vol / 10, 0, 1);
+  if (pcSound.on) { pcCtx(); pcSound.master.gain.setTargetAtTime(pcSound.vol, pcSound.ctx.currentTime, 0.05); }
+  else pcSilence();
+}
+// 2人で1つの曲を進める：どちらかが吸っている間だけ、曲の位置（拍）を進める
+const pcSeq = { pos: 0, idx: -1, done: false, song: null, last: performance.now() };
+function pcSeqReset() { pcSeq.pos = 0; pcSeq.idx = -1; pcSeq.done = false; }
+setInterval(() => {
+  const now = performance.now(), dt = Math.min(0.2, (now - pcSeq.last) / 1000);
+  pcSeq.last = now;
+  if (!pcSound.wantOn) return;
+  const song = tracker.song, flat = tracker.flat;
+  if (!song || !flat.length) return;
+  if (pcSeq.song !== song) { pcSeq.song = song; pcSeqReset(); }
+  const v = pcVoice('shared', 0);
+  const who = devices.filter((d) => d.connected && d.exh).map((d) => (d.name || '本体').replace('Shinkokyu-', ''));
+  const on = st.exhaling && (who.length > 0 || st.source === 'keys');
+  if (!on) { if (v.playing) pcPlay(v, 0); if (pcSeq.done) pcSeqReset(); return; } // だれも吸っていない：止まる（曲を吹き終えていたら、次は最初から）
+  if (pcSeq.done) return; // 最後まで行った：息を止めるまで待つ
+  v.level = 0.3 + 0.7 * clamp(st.strength || 0.6, 0, 1);
+  pcSeq.pos += dt * song.bpm / 60;
+  const last = flat[flat.length - 1];
+  if (pcSeq.pos >= last.start + last.beats) { pcSeq.done = true; pcPlay(v, 0); return; }
+  let i = pcSeq.idx < 0 ? 0 : pcSeq.idx;
+  while (i < flat.length - 1 && pcSeq.pos >= flat[i].start + flat[i].beats) i++;
+  if (i !== pcSeq.idx || !v.playing) { pcSeq.idx = i; pcPlay(v, flat[i].midi + 12, who.length ? who.join('+') : 'キー'); } // 本体と同じ高さ（1オクターブ上）
+  else if (v.playing) v.g.gain.setTargetAtTime(0.32 * v.level, pcSound.ctx.currentTime, 0.05);
+}, 20);
+// ためし：PC の音でドレミファソ（本体がなくても鳴る）
+function pcTest() {
+  const was = pcSound.on; pcSound.on = true; pcCtx();
+  pcSound.master.gain.setTargetAtTime(pcSound.vol || 0.6, pcSound.ctx.currentTime, 0.05);
+  const v = pcVoice('test', 0);
+  [72, 74, 76, 77, 79].forEach((m, i) => setTimeout(() => pcPlay(v, m, 'ためし'), i * 350));
+  setTimeout(() => pcPlay(v, 0), 5 * 350);
+  setTimeout(() => { if (!was && !pcSound.wantOn) { pcSound.on = false; pcSilence(); } }, 2000);
+}
+setInterval(() => { // 確かめ用の記録：この5秒に、だれが吸っているときに何音進んだか（"CE40+5F98" は2人同時）
+  const k = Object.keys(pcSound.counts);
+  if (!k.length) return;
+  if (window.shinkokyuApp) window.shinkokyuApp.log('pc_sound', { notes: pcSound.counts });
+  pcSound.counts = {};
+}, 5000);
+// 11/13：本体2台で同時に吸うと、吸っていない方の台の知らせ（約0.1秒ごと）で息が切れ、0.06秒ごとに「吸う・止まる」をくり返していた
+//   （記録では、2台の間に 0.2秒以下の息が 347 回中 323 回）。曲の位置も2台の間を行ったり来たりしていた。
+//   台ごとに吸っているか（dev.exh）を持ち、どれか1台でも吸っていれば「吸っている」にする。曲の位置は、最後に吸い始めた台（leadDev）に合わせる
+let leadDev = null;
+const anyExh = () => devices.some((d) => d.connected && d.exh);
+const isLead = (dev) => !leadDev || !leadDev.connected || leadDev === dev;
+$('connect').addEventListener('click', () => connectDevice());
+async function reconnectLoop(dev) {
+  if (dev.reconnecting) return;
+  dev.reconnecting = true;
+  while (!dev.connected) {
+    await new Promise((r) => setTimeout(r, 5000));
+    try { await dev.reconnect(); } catch {}
+  }
+  dev.reconnecting = false;
+}
+async function connectDevice(auto = false) { // auto：アプリが自動で探しているとき（見つからなくても何も知らせない。11/13）
+  if (!bluetoothAvailable()) { if (!OVERLAY) alert('このブラウザでは Bluetooth が使えません。Chrome か Edge で開いてください。'); return; }
+  const dev = new ShinkokyuDevice();
+  const show = () => ($('devices').textContent = devices.map((d) => `${d.name}：${d.connected ? 'つながっている' : '切れた'}`).join('　'));
+  // 11/12：つながった・切れたも記録する（どの台か）。つながっていないのか、届いているのに出ないのかを、記録から見分けるため
+  const logDev = (type) => { if (window.shinkokyuApp) window.shinkokyuApp.log(type, { name: dev.name, unplugged: dev.unplugged || undefined }); };
+  dev.addEventListener('connect', () => { show(); logDev('device_connect'); });
+  dev.addEventListener('disconnect', () => { dev.exh = false; if (st.exhaling && st.source === 'device' && !st.keyHeld && !anyExh()) breathEnd(); show(); logDev('device_disconnect'); if (!dev.unplugged) reconnectLoop(dev); }); // 自分で切った台は、つなぎ直さない（11/12）
+  // スペースキーで吹いている一服（st.keyMode）の間は、本体の息・曲の進みを見ない（キーの方で進めているので）
+  dev.addEventListener('breathstart', (e) => { if (!st.keyMode && e.detail.kind === 'exhale') { dev.exh = true; leadDev = dev; if (dev.song) useSong(dev.song); breathStart(); } }); // 吹き始めた台の曲に合わせる（2台つないでいて曲が違うとき）
+  dev.addEventListener('breathend', (e) => { if (!st.keyMode && e.detail.kind === 'exhale') { dev.exh = false; if (anyExh()) return; st.lastPeak = e.detail.peak || 0; breathEnd(e.detail.seconds); } }); // もう1台がまだ吸っていれば、息は続ける
+  dev.addEventListener('note', (e) => {
+    if (st.keyMode) return;
+    const next = tracker.flat[st.poppedIdx + 1];
+    if (e.detail.midi > 0 && next && next.midi + 12 === e.detail.midi) { startSessionIfNeeded(); popTo(st.poppedIdx + 1); }
+  });
+  dev.addEventListener('hello', (e) => { if (Number.isFinite(e.detail.volume)) showVol(e.detail.volume); if (e.detail.song) { dev.song = e.detail.song; if (!st.keyMode) useSong(dev.song); } });
+  dev.addEventListener('songchange', (e) => { dev.song = e.detail.song; if (!st.keyMode) useSong(dev.song); }); // 本体の SW1 で曲を替えた（11/12）
+  dev.addEventListener('status', (e) => {
+    const s = e.detail;
+    if (Number.isFinite(s.volume) && performance.now() - volTouchedAt > 1500) showVol(s.volume); // 0（音なし）も出す
+    if (st.keyMode) return;
+    const wasExh = !!dev.exh; dev.exh = s.state === 'exhale';
+    if (dev.exh && !wasExh) leadDev = dev; // 吸い始めた台を、曲の位置の基準にする
+    const lead = isLead(dev);
+    if (s.song && s.song !== dev.song) { dev.song = s.song; if (lead) useSong(s.song); } // 曲が替わったときだけ合わせる（2台が別の曲でも、行ったり来たりしない）
+    if (lead) tracker.syncTo(s.phrase, s.note, s.waiting);
+    if (dev.exh || !anyExh()) st.strength = clamp((s.dP - 5) / 40, 0.25, 1);
+    if (st.exhaling && dev.exh && Number.isFinite(s.dP)) { st.maxDP = Math.max(st.maxDP || 0, s.dP); if (window.shinkokyuApp && window.shinkokyuApp.live) window.shinkokyuApp.live('level', { dP: s.dP }); } // 右下の火の子：強すぎると火の粉が散る
+    if (anyExh() && !st.exhaling) breathStart();
+    if (!anyExh() && st.exhaling && st.source === 'device') breathEnd();
+    if (st.exhaling && !tracker.done && tracker.idx > st.poppedIdx) popTo(tracker.idx);
+  });
+  dev.addEventListener('songdone', () => { if (!st.keyMode && isLead(dev)) onSongDone(); }); // 2台のとき：基準の台の曲が終わったら
+  // 11/12 夜：本体の気圧センサーが動いていない（吸っても何も起きない）ときは知らせる。本体は2秒ごとにつなぎ直している
+  dev.addEventListener('sensor', (e) => {
+    if (window.shinkokyuApp) window.shinkokyuApp.log('device_sensor', { name: dev.name, ok: e.detail.ok });
+    if (!e.detail.ok && OVERLAY) notify('本体の気圧センサーが動いていません', `${dev.name}：吸っても反応しません。電源を入れ直すか、センサーの線を確かめてください`);
+  });
+  // 一服のお誘い（曲送りボタンの長押し）：アプリに渡す。ブラウザだけで開いているときは、ここで知らせる
+  dev.addEventListener('invite', () => { if (window.shinkokyuApp && window.shinkokyuApp.invite) window.shinkokyuApp.invite('device'); else invited(10); });
+  dev.addEventListener('talk', () => { if (window.shinkokyuApp && window.shinkokyuApp.talk) window.shinkokyuApp.talk(); }); // 本体の＋−同時押し：声を録る（アプリのときだけ。11/11）
+  try {
+    await dev.connect((bd) => devices.some((x) => (x.device && x.device.id === bd.id) || (x.name && x.name === bd.name))); // 11/13：同じ本体を二重につながない
+    devices.push(dev); st.source = 'device';
+    tracker.reset(); st.poppedIdx = -1; await dev.restart(); show();
+    if (OVERLAY && !auto) notify('本体とつながりました', dev.name);
+  } catch (err) {
+    if (auto) return; // 自動で探して見つからなかった・やめた：静かに終わる
+    console.warn(err);
+    if (err && err.dup) { // 選んだのが、もうつないでいる本体だった。つなぎ直し中なら、そちらに任せる
+      if (window.shinkokyuApp) window.shinkokyuApp.log('device_dup', { name: err.name0 });
+      if (OVERLAY) notify('その本体は、もうつながっています', `${err.name0}：もう1台をつなぐときは、もう1台の名前を選んでください`);
+      return;
+    }
+    if (OVERLAY) notify('本体が見つかりませんでした', '本体の電源と、近くにあるかを確かめてください');
+  }
+}
+// 設定のウィンドウ：× で閉じる。閉じたら、マウスを動かしたときだけ右上に ⚙ が出る（発表のときに邪魔にならないように）
+function toggleHelp(show = $('help').classList.contains('hidden')) {
+  $('help').classList.toggle('hidden', !show);
+  $('gear').style.display = show ? 'none' : '';
+}
+$('close').addEventListener('click', () => toggleHelp(false));
+$('gear').addEventListener('click', () => toggleHelp(true));
+let gearTimer = 0;
+addEventListener('mousemove', () => {
+  $('gear').classList.add('show');
+  clearTimeout(gearTimer);
+  gearTimer = setTimeout(() => $('gear').classList.remove('show'), 3000);
+});
+toggleHelp(true);
+
+// タブ
+document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', x === b));
+  document.querySelectorAll('[data-pane]').forEach((p) => (p.hidden = p.dataset.pane !== b.dataset.tab));
+}));
+// 効果の一覧は、押しても切りかえられる
+$('fxlist').addEventListener('click', (e) => {
+  const k = e.target.closest('[data-key]')?.dataset.key; const f = FX.find((x) => x.key === k);
+  if (f) { f.on = !f.on; renderFxList(); }
+});
+
+// 音量：本体の音量（0〜10。0 は音なし）を画面から変える
+let volTouchedAt = 0;
+function showVol(v) { $('vol').value = v; $('volnum').textContent = v; }
+async function sendVol(v) {
+  v = Math.max(0, Math.min(10, v)); showVol(v); volTouchedAt = performance.now(); // 11/12：最大 8 → 10
+  const live = devices.filter((d) => d.connected);
+  $('volnote').textContent = live.length ? '本体の音量（0〜10。0 は音なし）。本体のボタン SW2・SW3 と同じ' : '本体がつながっていないので、まだ変わらない（本体をつなぐと変えられる）';
+  for (const d of live) await d.setVolume(v).catch(() => {});
+}
+$('vol').addEventListener('input', () => ($('volnum').textContent = $('vol').value));
+$('vol').addEventListener('change', () => sendVol(+$('vol').value));
+$('voldown').addEventListener('click', () => sendVol(+$('vol').value - 1));
+$('volup').addEventListener('click', () => sendVol(+$('vol').value + 1));
+
+$('full').addEventListener('click', () => { toggleHelp(false); fillUp(); }); // すぐ吹き始められるように閉じる
+async function fillUp() {
+  endHold(); st.acc = 1; st.notifiedFull = false; st.breaths = []; tracker.reset(); st.poppedIdx = -1;
+  for (const d of devices) if (d.connected) await d.restart().catch(() => {});
+}
+
+// ---------------- デスクトップアプリとのやりとり ----------------
+// Windows の通知（右下のポップアップ）
+function notify(title, body, onclick) {
+  if (st.game) return; // ゲームの見せ方では、Windows の通知の代わりに右の吹き出し
+  try { const n = new Notification(title, { body, silent: false }); if (onclick) n.onclick = onclick; } catch {}
+}
+// 休憩の通知：理由（口実）を添える。つづけて作業した時間と、ふだんとのちがい（アプリが記録から計算する）
+async function notifyBreak() {
+  let r = null;
+  try { if (window.shinkokyuApp && window.shinkokyuApp.reason) r = await window.shinkokyuApp.reason(); } catch {}
+  const lines = ['そろそろ 一服 しませんか', ...((r && r.lines) || [])];
+  if (window.shinkokyuApp) window.shinkokyuApp.log('notify', { kind: 'full', minutes: r ? r.minutes : undefined, metric: r && r.metric ? r.metric : undefined });
+  // 通知を押すと、煙を隠していても表示に切りかえて、もう一度知らせる
+  notify('そろそろ一服しませんか', (r && r.line ? r.line + '\n' : '') + '押すと、たまった煙を見られます', () => {
+    if (window.shinkokyuApp) window.shinkokyuApp.showSmoke();
+    showMessage(lines, 300, 10000);
+  });
+  showMessage(lines, 0, 10000);
+}
+// 煙がいっぱいになったら、1回だけ知らせる（何度も出さない）
+setInterval(() => {
+  if (st.acc >= 1 && !st.notifiedFull && OVERLAY && !st.testMode) {
+    st.notifiedFull = true;
+    notifyBreak();
+  }
+  if (st.acc < 0.5) st.notifiedFull = false;
+}, 1000);
+// 通知領域のアイコン：小さな雲が、たまり具合に合わせて下から白くなる（10段）
+let lastIconLevel = -1;
+function updateTrayIcon() {
+  if (!window.shinkokyuApp) return;
+  const level = Math.round(10 * puffs.length / MAXP());
+  if (level === lastIconLevel) return;
+  lastIconLevel = level;
+  const src = CLOUD_MAPS[3], c = document.createElement('canvas'); c.width = c.height = 32;
+  const x = c.getContext('2d'), cw = src[0].length, ch = src.length, ox = (32 - cw) >> 1, oy = (32 - ch) >> 1;
+  const fillRow = ch - Math.round(ch * level / 10); // ここより下を白くする
+  src.forEach((row, yy) => [...row].forEach((chr, xx) => {
+    if (chr === '.') return;
+    x.fillStyle = chr === '#' ? '#1b1c22' : yy >= fillRow ? (chr === 's' ? '#dfe6f7' : '#ffffff') : '#5b6474';
+    x.fillRect(ox + xx, oy + yy, 1, 1);
+  }));
+  window.shinkokyuApp.setTrayIcon(c.toDataURL(), `シン呼吸：煙 ${level * 10}%（押すと操作パネル）`);
+}
+setInterval(updateTrayIcon, 1000);
+// 右下の煙メーター用の雲の絵：黒い背景の上で形とたまり具合が分かるように、外枠を明るい灰色に、まだの所を暗く、たまった所を白くする
+let lastGaugeRow = -1;
+function updateGaugeIcon() {
+  if (!window.shinkokyuApp || !window.shinkokyuApp.setGaugeIcon) return;
+  const src = CLOUD_MAPS[3], cw = src[0].length, ch = src.length;
+  const fillRow = ch - Math.round(ch * Math.min(1, puffs.length / MAXP())); // ここより下を白くする
+  if (fillRow === lastGaugeRow) return;
+  lastGaugeRow = fillRow;
+  const c = document.createElement('canvas'); c.width = cw; c.height = ch;
+  const x = c.getContext('2d');
+  src.forEach((row, yy) => [...row].forEach((chr, xx) => {
+    if (chr === '.') return;
+    x.fillStyle = chr === '#' ? '#a9b3c6' : yy >= fillRow ? (chr === 's' ? '#c9d3e6' : '#ffffff') : (chr === 's' ? '#232833' : '#2e3542');
+    x.fillRect(xx, yy, 1, 1);
+  }));
+  window.shinkokyuApp.setGaugeIcon(c.toDataURL());
+}
+setInterval(updateGaugeIcon, 500);
+// 一服のお誘いが届いた：画面に出し、つながっている本体を紫に点滅させる（誰からかは出さない・記録しない）
+function invited(sec) {
+  showMessage(['一服のお誘いが 届きました', 'ひと息 入れに 行きませんか'], 0, sec * 1000);
+  if (!OVERLAY) notify('一服のお誘いが届きました', 'ひと息入れに行きませんか');
+  for (const d of devices) if (d.connected) d.light(sec).catch(() => {});
+}
+// アプリのメニューから呼ぶもの
+window.shinkokyuDesktop = {
+  setGame: (on) => { st.game = true; dismissMessage(); }, // 見せ方（11/08）。11/11：画面全体の煙はなくしたので、いつも右下の火の子（煙は描かない）
+  invited: (sec) => invited(sec), // 一服のお誘いが届いた（アプリが通知を出したあと）
+  connect: () => connectDevice(),
+  autoConnect: () => connectDevice(true), // 11/13：アプリが自動で探す（覚えている本体が見つかればつなぐ）
+  // 11/12：操作パネルから、台を指して光らせる・切る
+  light: (name) => { const d = devices.find((x) => x.name === name && x.connected); if (d) d.light(3).catch(() => {}); },
+  unplug: (name) => {
+    const i = devices.findIndex((x) => x.name === name); if (i < 0) return;
+    const d = devices[i]; d.unplugged = true; devices.splice(i, 1); d.disconnect();
+    $('devices').textContent = devices.map((x) => `${x.name}：${x.connected ? 'つながっている' : '切れた'}`).join('　');
+    if (!devices.some((x) => x.connected)) { st.source = 'keys'; if (st.exhaling) breathEnd(); }
+  },
+  full: () => fillUp(),
+  setFill: (min) => { st.fillMin = min; },
+  setVolume: (v) => sendVol(v),
+  setPcSound: (on, vol) => setPcSound(on, vol), // 11/13：PC からも音を出す
+  pcTest: () => pcTest(),
+  replay: () => replay(),
+  dismiss: () => dismissMessage(),
+  userBack: () => { if (!st.replay) replay(); },     // 席を外していた人が戻ってきた
+  activity: () => { if (st.msg && performance.now() - st.msg.at > 4000) dismissMessage(); }, // 作業を始めたら消す
+  addMoya: (text) => addMoya(text), // 操作パネルの「もやもや」から
+  testMode: (on) => { st.testMode = !!on; if (on) hideSign('test'); },
+  sign: (on) => (on ? showSign('manual') : hideSign('manual')), // 操作パネルの「一服に行く」
+  signOff: (why) => hideSign(why),
+  keyBreath: (on) => keyBreath(!!on), // 操作パネルのスペースキー（押した・離した）
+  setLabelsShown: (on) => { st.labelsShown = !!on; }, // 煙の上の言葉を見せるか（アプリが、席にいるかで決める）
+  voiceStatus: (lines) => { st.voice = lines && lines.length ? lines : null; }, // 声を煙のラベルにする間の知らせ // 休憩の実験の間：休憩の通知・「一服おわり」の演出を出さない
+  testBreath: () => { endHold(); st.breaths = []; tracker.reset(); st.poppedIdx = -1; for (const d of devices) if (d.connected) d.restart().catch(() => {}); }, // 深呼吸の3分：曲を最初から
+};
+// アプリへ今の様子を知らせる（操作パネルに出す・戻ってきたかの判断に使う）
+setInterval(() => {
+  if (!window.shinkokyuApp) return;
+  window.shinkokyuApp.sendState({
+    devices: devices.map((d) => ({ name: d.name, connected: d.connected })),
+    fill: Math.round(100 * puffs.length / MAXP()), volume: +$('vol').value, fillMin: st.fillMin,
+    inSession: st.poppedIdx >= 0 || st.exhaling, done: !!st.holdUntil, msg: !!st.msg, replaying: !!st.replay, sign: !!st.sign, voice: !!st.voice, labelsShown: st.labelsShown !== false,
+    moya: puffs.filter((p) => p.label && !p.doomed).sort((a, b) => Math.hypot(a.x - ORIGIN[0], a.y - ORIGIN[1]) - Math.hypot(b.x - ORIGIN[0], b.y - ORIGIN[1])).map((p) => p.label), // 11/12：次に消える順（右下の火の子は、先頭の薪から燃やす）
+    progress: Math.round(tracker.progress() * 1000) / 1000, // 曲の進み具合 0〜1（右下の熾火の回る速さに使う。11/12）
+  });
+}, 1000);
+// もやもやを煙にする（ブラウザの設定の窓からも、デスクトップアプリの操作パネルからも使う）
+function addMoya(text) {
+  const v = String(text ?? $('moya').value).trim().slice(0, 6); if (!v) return;
+  const plain = puffs.filter((p) => !p.label && !p.doomed);
+  if (plain.length) setLabel(plain[(Math.random() * plain.length) | 0], v); else addPuff(v);
+  if (st.poppedIdx >= 0) {
+    st.sessionL++;
+    const lp = puffs.find((q) => q.label === v);
+    if (lp && st.snapshot) st.snapshot.push({ x: lp.x, y: lp.y, img: lp.img, label: v });
+  }
+  $('moya').value = '';
+}
+$('addmoya').addEventListener('click', () => addMoya());
+$('moya').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) addMoya(); });
+
+await document.fonts.load('16px "DotGothic16"').catch(() => {});
+window.shinkokyu = { st, tracker, puffs, FX, showMessage, dismissMessage }; // 確かめ用（開発者ツールから触る）
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

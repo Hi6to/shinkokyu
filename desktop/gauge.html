@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>シン呼吸 煙メーター</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+<style>
+  /* 右下に浮かぶ、煙のたまり具合のメーター（操作パネルと同じ、黒い箱＋白い二重の枠） */
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; user-select: none; font-family: "DotGothic16", "MS Gothic", monospace; color: #f2f4f8; }
+  #box { position: absolute; inset: 4px; background: rgba(11, 13, 18, 0.9); border: 2px solid #f2f4f8; outline: 1px solid #f2f4f8; outline-offset: 2px; display: flex; align-items: center; gap: 8px; padding: 0 10px; cursor: grab; }
+  #box:active { cursor: grabbing; }
+  #cloud { height: 52px; image-rendering: pixelated; flex: none; } /* 雲の絵（1マス＝約3.5px）。文字や％は出さず、雲の白さだけでたまり具合を見せる */
+  #eye { margin-left: auto; font: inherit; font-size: 13px; background: #0b0d12; color: #f2f4f8; border: 2px solid #f2f4f8; padding: 2px 6px; cursor: pointer; white-space: nowrap; }
+  #eye:hover { background: #f2f4f8; color: #0b0d12; }
+  #eye.off { color: #a9b3c6; border-color: #a9b3c6; }
+  #x { position: absolute; top: -2px; right: 2px; font-size: 16px; padding: 0 4px; background: none; border: none; color: #f2f4f8; font: inherit; cursor: pointer; display: none; }
+  #box:hover #x { display: block; }
+  #x:hover { color: #ff8a7a; }
+  #fire { width: 90px; height: 96px; image-rendering: pixelated; flex: none; display: none; margin-left: -6px; }   /* 火の子（ゲームの見せ方）。1マス＝3px */
+  #info { display: none; flex-direction: column; gap: 5px; min-width: 0; }
+  #fname { font-size: 15px; white-space: nowrap; }
+  #fname small { display: block; font-size: 11px; color: #c9ced8; }   /* 「ふたりの」焚き火（2台のとき） */
+  #pips { display: flex; gap: 4px; }
+  #pips i { width: 7px; height: 7px; border: 1px solid #a9b3c6; display: block; }
+  #pips i.on { background: #ffe08a; border-color: #ffe08a; }
+  body.game #fire, body.game #info { display: flex; }
+  body.game #fire { display: block; }
+  body.game #cloud, body.game #eye { display: none; }
+  .flash { animation: flash 0.5s steps(1) 2; }
+  .lit { border-color: #ffe08a !important; outline-color: #ffe08a !important; }
+  .warm { border-color: #ff9b54 !important; outline-color: #ff9b54 !important; }   /* 薪をくべて炎が大きいあいだ、枠が橙に */
+  @keyframes flash { 50% { background: #f2f4f8; } }
+  .shake { animation: shake 0.24s steps(2) 1; }
+  @keyframes shake { 0% { transform: translate(-2px, 0); } 50% { transform: translate(2px, -1px); } 100% { transform: translate(0, 0); } }
+  /* 残り火が全部火に入った瞬間（11/11）：止まって（ヒットストップ）箱が橙に光る → 黄に → 大きくゆれる（白は使わない） */
+  .hit { animation: hit 0.35s steps(1) 1; }
+  @keyframes hit { 0% { background: #ff9b54; border-color: #ffe08a; outline-color: #ffe08a; } 45% { background: #5a2a10; filter: brightness(1.6); border-color: #ff9b54; outline-color: #ff9b54; } 100% { } }
+  .boom { animation: boom 0.9s steps(9) 1; }
+  @keyframes boom { 0% { transform: translate(-4px, 2px); } 11% { transform: translate(4px, -3px); } 22% { transform: translate(-4px, -1px); } 33% { transform: translate(3px, 3px); } 44% { transform: translate(-3px, 0); } 55% { transform: translate(2px, -2px); } 66% { transform: translate(-2px, 1px); } 77% { transform: translate(1px, -1px); } 100% { transform: translate(0, 0); } }
+  /* 火の絵だけ、ぐっと寄る（ズーム）→ カクカク戻る */
+  #fire { transform-origin: 50% 70%; }
+  .punch { animation: punch 0.7s steps(7) 1; }
+  @keyframes punch { 0% { transform: scale(1.45); } 30% { transform: scale(1.3); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+  .crouch { transform: scale(0.92); }
+  /* 11/12：言葉の層（話した言葉の吹き出し・焼き印・燃えていく札・火の粉にほどける文字）。絵の上に重ねる。押せない */
+  #fx { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="box" title="押すと操作パネル">
+  <img id="cloud" alt="煙のたまり具合">
+  <canvas id="fire" width="90" height="96"></canvas>
+  <div id="info"><div id="fname">火種</div><div id="pips"><i></i><i></i><i></i><i></i><i></i></div></div>
+  <button id="eye" title="画面全体の煙を、出す／隠す">隠す</button>
+  <button id="x" title="メーターを消す（操作パネルでまた出せる）">×</button>
+  <canvas id="fx"></canvas>
+</div>
+<script src="hinoko.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  let full = false, fire = null, fill = 0, inSession = false, exhaling = false, lastStage = null;
+  let strong = false, strongPa = 70, pairOn = false, pairT0 = 0;
+  // 薪（もやもや）：pile＝いま積んで見せている薪（札の言葉。言葉を出さないときは null）、want＝アプリから届いた薪（先頭＝次に燃える薪）。
+  // 11/12：もやもやの見せ場を、1回の一服の中に4つ（話す → 刻む → 燃やし進む → ほどけて空へ・よろこぶ）
+  //   ① 話している間：火の子が耳をすます（声の波が左から届き、炎が声に合わせてゆれる）。言葉にしている間は「…」
+  //   ② 刻む（言葉ありで 2.8秒）：言葉が吹き出しで大きく出る（1秒読める）→ 薪が上から落ちて積まれる → 言葉がぎゅっと縮んで薪の帯に押され、帯が橙に光る（焼き印）
+  //   ③ 燃やし進む：曲を吹いている間、次に燃える薪が火の真下へ行き、曲の進みに合わせて左から燃えていく。札の言葉も左から焦げていく
+  //   ④ ほどける（2.6秒）：薪が燃えきったら「ぼっ」。札の言葉が一粒ずつほどけて火の粉になり、窓の上へ。窓の外では、別の透明な窓（rise.html）が
+  //      画面のいちばん上まで火の粉を昇らせる（言葉は外に出さない。火の粉だけ）。火の子は「ごちそうさま」とよろこんで、ぴょんとはねる
+  let pile = [], want = [], anim = null, onFire = null, burnedN = 0;
+  const DROP_MS = 1500, DROP_TEXT_MS = 2800, BURN_FLY = 600, BURN_LIGHT = 900, BURN_FINISH = 250, DIS_MS = 2600, HAPPY_AT = 600, HAPPY_MS = 2000;
+  const WOOD_EMBERS = 3; // 薪が1本燃えると、火のまわりの熾火が一気に3つふえる（見せ方だけ）
+  let woodBonus = 0, songOver = false, wasIn = false;
+  let listen = false, think = false, voiceLv = 0; // ① 話している間・言葉にしている間（アプリから） // songOver：この一服の残り火はもう火に入った（曲が終わったあとに燃える薪は、輪に足さずに飛び出して消える）
+  // 残り火（11/11 改2）：一服の間、吹いた息ごとに熾火が火のまわりの輪にふえる。一服が終わる（アプリから 0 が届く）と、
+  //   ① ためる（0.6秒）：輪が少し外へ広がって速く回り、熾火が明るくなる。火は少し縮こまる
+  //   ② 吸いこむ（2.6秒）：集中線が火へ流れ、熾火が長い尾を引いてうずを巻きながら1つずつ火へ。入るたびに中心がぱっと光り、炎がふくらむ
+  //   ③ ヒットストップ（0.35秒）：全部入った瞬間に絵が止まり、白黒反転 → ぱっと明るく。火の絵にぐっと寄る
+  //   ④ どん（2.6秒）：炎がふだんの倍ちかくまで大きくなり、衝撃の輪が広がって、枠が大きくゆれる → ゆっくり戻る
+  const A_GATHER = 600, A_SPIRAL = 2600, A_HIT = 350, A_BURST = 2600, ABSORB_MS = A_GATHER + A_SPIRAL + A_HIT + A_BURST;
+  const SPAWN_MS = 450;
+  // 熾火が火のまわりを回る速さ（11/12）：曲の後半ほど速くなる。1 ＝ 前の速さ（1周 約16秒）
+  //   速さ ＝ SPIN_START ＋（SPIN_END − SPIN_START）× 進み具合^SPIN_CURVE（CURVE が大きいほど、終わりの方でぐっと速くなる）
+  const SPIN_START = 1.6, SPIN_END = 4.0, SPIN_CURVE = 2;
+  let songP = 0, emberPhase = 0, lastT = performance.now();
+  const spinRate = (p) => SPIN_START + (SPIN_END - SPIN_START) * Math.pow(Math.max(0, Math.min(1, p)), SPIN_CURVE);
+  let embersShown = 0, embersLive = 0, absorb = null, spawnT = 0, spawnFrom = 0, pendingReveal = null;
+  const replay = (cls, id = 'box') => { $(id).classList.remove(cls); void $(id).offsetWidth; $(id).classList.add(cls); };
+  // a のうち、b と対にならなかったもの（同じ言葉どうしを先に対にし、言葉の分からない null は何とでも対にする）
+  function leftovers(a, b) {
+    const rest = b.slice(), left = [], out = [];
+    for (const x of a) { const i = x != null ? rest.indexOf(x) : -1; if (i >= 0) rest.splice(i, 1); else left.push(x); }
+    for (const x of left) { const i = x == null ? (rest.length ? 0 : -1) : rest.indexOf(null); if (i >= 0) rest.splice(i, 1); else out.push(x); }
+    return out;
+  }
+  function stepWood(t) {
+    if (anim && t - anim.t0 > anim.dur) { if (anim.kind === 'drop') pile.push(anim.text); anim = null; }
+    if (anim) return;
+    const gone = leftovers(pile, want);
+    if (gone.length) { // へった：燃やす。曲の間に火の真下で燃えていた薪なら、そのまま燃えきる。そうでなければ、火の真下へ飛んで火がついてから
+      const g0 = gone[0], fromFire = !!(onFire && onFire.fly >= 1);
+      let i = pile.indexOf(g0); if (i < 0) i = g0 == null ? 0 : pile.length - 1;
+      pile.splice(i, 1);
+      const pre = fromFire ? BURN_FINISH : BURN_FLY + BURN_LIGHT;
+      anim = { kind: 'burn', text: g0, t0: t, pre, dur: pre + DIS_MS, fromFire, lit0: fromFire ? onFire.lit : 0 };
+      if (inSession) burnedN++;
+      onFire = null;
+      return;
+    }
+    const add = leftovers(want, pile);
+    if (add.length) { anim = { kind: 'drop', text: add[0], t0: t, slot: Math.min(2, pile.length), dur: add[0] ? DROP_TEXT_MS : DROP_MS }; return; }
+    if (pile.length === want.length) pile = want.slice(); // 同じ組なら、並びを煙の画面に合わせる（先頭＝次に燃える薪）
+  }
+  // 残り火を吸いこむのは、燃えている薪と、これから燃える薪（曲の終わりに消えた言葉）が、全部燃えきってから
+  function burnsDoneAt(now) {
+    let end = anim ? anim.t0 + anim.dur : now, first = !anim;
+    for (let i = 0; i < leftovers(pile, want).length; i++) { end += (first && onFire && onFire.fly >= 1 ? BURN_FINISH : BURN_FLY + BURN_LIGHT) + DIS_MS + 120; first = false; }
+    return Math.max(now, end);
+  }
+  // ③ 曲を吹いている間：次に燃える薪（pile の先頭）が火の真下へ行き、曲の進みに合わせて燃えていく。
+  //   薪が何本かあれば、曲を本数で分けて1本ずつ（煙の画面も、だいたい同じ間隔で言葉の煙を消す）
+  function updateOnFire(t, absorbOn) {
+    if (!inSession) { onFire = null; return; }
+    if (anim || absorbOn || songP <= 0 || !pile.length) return;
+    if (!onFire) onFire = { t0: t, fly: 0, lit: 0 };
+    const total = burnedN + pile.length;
+    onFire.fly = Math.min(1, (t - onFire.t0) / BURN_FLY);
+    onFire.lit = Math.max(0, Math.min(0.97, (songP - burnedN / total) * total));
+    onFire.text = pile[0];
+  }
+  window.gaugeApi.onState((s) => {
+    if (s.scale) { document.documentElement.style.zoom = s.scale; zoomNow = s.scale; } // 大きさ（小・ふつう・大・特大）
+    if (s.icon) $('cloud').src = s.icon;
+    const f = Math.max(0, Math.min(100, Math.round(s.fill || 0)));
+    full = f >= 100;
+    $('box').title = `煙 ${f}%${full ? '（一服どき）' : s.inSession ? '（一服中）' : ''}。ドラッグで動かせる・押すと操作パネル`; // 文字はマウスを乗せたときだけ
+    $('eye').textContent = s.visible ? '煙を隠す' : '煙を出す';
+    $('eye').classList.toggle('off', !s.visible);
+    // 火の子（ゲームの見せ方）：段の名前と、次の段までの点（5つ）。点数は出さない
+    document.body.classList.toggle('game', !!s.game);
+    fill = f / 100; inSession = !!s.inSession;
+    if (s.strongPa) strongPa = s.strongPa;
+    if (!!s.pair !== pairOn) { pairOn = !!s.pair; pairT0 = performance.now(); }      // 2台：2つの火が寄ってくる
+    // 残り火の数。吸いこむ演出は、いったん始めたら最後まで見せる（途中で数が届いても止めない。終わってから今の数にする）
+    want = Array.isArray(s.woodLabels) ? s.woodLabels.slice(0, s.wood || 0) : Array(s.wood || 0).fill(null); // 言葉を出さないときは、本数だけ
+    const e = Math.max(0, s.embers || 0);
+    embersLive = e;
+    songP = s.progress || 0;
+    if (s.inSession && !wasIn) { songOver = false; burnedN = 0; } wasIn = !!s.inSession;
+    if (e > 0) songOver = false;
+    if (!absorb) {
+      if (e === 0 && (embersShown > 0 || (woodBonus > 0 && !s.inSession))) { absorb = { n: embersShown + woodBonus, t0: burnsDoneAt(performance.now()) }; woodBonus = 0; songOver = true; } // 薪が燃えきるのを見せてから、吸いこむ
+      else if (Math.min(e + woodBonus, 20) > Math.min(embersShown + woodBonus, 20)) { spawnT = performance.now(); spawnFrom = embersShown + woodBonus; } // 新しい熾火（1つか2つ）が火から飛び出す
+      embersShown = e;
+    }
+    if (s.fire && !reveal) {
+      fire = s.fire;
+      if (!noteKey) { if (pairOn) $('fname').innerHTML = '<small>ふたりの</small>焚き火'; else $('fname').textContent = fire.name; }
+      const on = fire.next ? Math.floor(fire.progress * 5) : 5;
+      [...$('pips').children].forEach((p, i) => p.classList.toggle('on', i < on));
+      if (s.game) $('box').title = `火の子：${fire.name}${fire.next ? `（次は ${fire.next}）` : ''}。まわりの煙＝作業でたまったもやもや ${f}%。ドラッグで動かせる・押すと操作パネル`;
+      if (lastStage !== null && fire.stage > lastStage) { $('box').classList.remove('flash'); void $('box').offsetWidth; $('box').classList.add('flash'); }
+      lastStage = fire.stage;
+    }
+  });
+  // 吹いている間は、火の子が明るく大きくなる
+  window.gaugeApi.onLive((type, d) => {
+    if (type === 'exhale_start') { exhaling = true; strong = false; } else if (type === 'exhale_end') { exhaling = false; strong = false; } else if (type === 'level' && d) strong = d.dP >= strongPa;
+    else if (type === 'listen') { listen = !!(d && d.on); if (!listen) voiceLv = 0; }   // ① 話し始めた・終わった
+    else if (type === 'think') think = !!(d && d.on);                                  // ① 言葉にしている
+    else if (type === 'voice' && d) voiceLv = Math.max(voiceLv, +d.v || 0);            // 声の大きさ（0〜1）
+  });
+  // 戻ったとき：前の姿（0.8秒）→ カクカク点滅して入れかわる（1秒）→ 今の姿で火の粉（2秒）。点は1つずつ埋まる
+  let reveal = null;
+  const setPips = (n) => [...$('pips').children].forEach((p, i) => p.classList.toggle('on', i < n));
+  const pipsOf = (v) => (v.next ? Math.floor(v.progress * 5) : 5);
+  window.gaugeApi.onGrow((g) => { if (absorb) pendingReveal = g; else reveal = { ...g, t0: performance.now() }; }); // 残り火の演出中なら、終わってから
+  function revealFrame(t) {
+    const k = t - reveal.t0, { from, to } = reveal;
+    let v = from, mood = 'idle';
+    if (k > 800 && k < 1800) { v = Math.floor(k / 120) % 2 ? to : from; mood = 'blow'; }
+    else if (k >= 1800) { v = to; mood = 'blow'; }
+    $('fname').textContent = v.name;
+    if (k < 1800) setPips(pipsOf(from));
+    else { const steps = Math.floor((k - 1800) / 220); const target = to.stage > from.stage ? pipsOf(to) : pipsOf(to); setPips(Math.min(target, (to.stage > from.stage ? 0 : pipsOf(from)) + steps)); }
+    $('box').classList.toggle('lit', k > 800 && k < 1800 && Math.floor(k / 120) % 2 === 0); // 入れかわる間は、枠がカクカク光る
+    window.drawHinoko($('fire'), { stage: v.stage, mood, t, span: 30, camp: v.stage === 4 ? v.camp || 0 : 0 });
+    if (k > 3800) { reveal = null; fire = to; $('box').classList.remove('lit'); $('fname').textContent = to.name; setPips(pipsOf(to)); }
+  }
+  // 名前の所の一言（ふだんは段の名前）
+  let noteKey = '';
+  function setNote(key, html) {
+    if (key === noteKey) return; noteKey = key;
+    if (html) $('fname').innerHTML = html; else if (pairOn) $('fname').innerHTML = '<small>ふたりの</small>焚き火'; else $('fname').textContent = fire.name;
+  }
+  let geo = { ox: 45, oy: 60, px: 3 }; // 火の子の絵のマスの位置（言葉の層で使う）
+  setInterval(() => {
+    if (!document.body.classList.contains('game') || !fire) return;
+    if (reveal) { if (absorb) absorb.t0 = performance.now(); revealFrame(performance.now()); return; } // 育った演出の間は、残り火の演出を待たせる
+    const t = performance.now();
+    const absorbOn = !!absorb && t >= absorb.t0; // 薪が燃えきるのを待っている間は、まだ始めない
+    voiceLv *= 0.8;                              // 声が届かなくなったら、ゆれは少しずつおさまる
+    let mood = exhaling ? (strong ? 'scatter' : 'blow') : listen ? 'listen' : think ? 'think' : (!inSession && fill >= 0.7 ? 'sleepy' : 'idle');
+    if (!absorbOn) stepWood(t); // 11/11：もやもやの薪が火に入るのは、残り火の演出が終わってから（同時だと、どちらも見えにくい）
+    updateOnFire(t, absorbOn);
+    // 薪の絵の決まり（drop：落ちてくる薪／stamp：焼き印／fireLog：火の真下の薪／burn：ぼっ のあと）
+    let wood = pile.length, drop = null, stamp = null, fireLog = null, burn = null, hop = 0, happy = false, flare = 0;
+    if (anim && anim.kind === 'drop') {
+      const k = t - anim.t0;
+      if (!anim.text) drop = { p: Math.min(1, k / DROP_MS) };
+      else if (k < 900) { /* 吹き出しを読む間。薪はまだ */ }
+      else if (k < 1800) drop = { p: Math.min(1, (k - 900) / 1200) };
+      else { wood = pile.length + 1; stamp = { i: anim.slot, q: (k - 1800) / 1000 }; if (!anim.stamped) { anim.stamped = true; replay('shake'); } }
+    }
+    if (onFire && !(anim && anim.kind === 'burn')) { fireLog = { fly: onFire.fly, lit: onFire.lit }; wood = Math.max(0, wood - 1); }
+    if (anim && anim.kind === 'burn') {
+      const k = t - anim.t0;
+      if (k < anim.pre) fireLog = anim.fromFire ? { fly: 1, lit: anim.lit0 + (1 - anim.lit0) * k / anim.pre } : { fly: Math.min(1, k / BURN_FLY), lit: Math.max(0, (k - BURN_FLY) / BURN_LIGHT) };
+      else {
+        const d = k - anim.pre;
+        burn = { p: Math.min(1, 0.5 + 0.5 * d / DIS_MS) };
+        if (!anim.popped) { // ぼっ：火の絵にぐっと寄って、窓ごと小さくゆれる。一服の間なら、まわりの熾火が一気にふえる。言葉は火の粉にほどける
+          anim.popped = true; replay('punch', 'fire'); window.gaugeApi.shake('pop'); startDissolve(anim, t);
+          if (!songOver && !absorbOn && (inSession || embersShown + woodBonus > 0)) { spawnFrom = embersShown + woodBonus; woodBonus += WOOD_EMBERS; spawnT = t; } else anim.ring = true;
+        }
+        if (d >= HAPPY_AT && d < HAPPY_AT + HAPPY_MS) { happy = true; hop = Math.floor((d - HAPPY_AT) / 170) % 2 && d < HAPPY_AT + 1100 ? 1 : 0; }
+      }
+    }
+    let burstRing = burn && anim.ring ? { n: 6, q: (burn.p - 0.5) / 0.5 } : null;
+    if (happy && !exhaling) mood = 'happy';
+    // 名前の所の一言
+    if (anim && anim.kind === 'burn' && t - anim.t0 >= anim.pre) setNote('eat', '<small>もやもやの薪</small>ごちそうさま');
+    else if (anim && anim.kind === 'drop' && t - anim.t0 >= 1800) setNote('wood', '<small>もやもやが</small>薪に なった');
+    else if (listen) setNote('listen', '<small>もやもや</small>きいてるよ…');
+    else if (think) setNote('think', '<small>もやもやを</small>薪に してる…');
+    else if (fireLog && fireLog.fly >= 1 && exhaling) setNote('burning', '<small>もやもやの薪が</small>燃えてる');
+    else setNote('', null);
+    const dt = Math.min(500, t - lastT); lastT = t;
+    if (!absorbOn) emberPhase += dt * spinRate(songP);           // 少しずつ足して回す（速さが変わっても、位置は飛ばない）
+    let emberN = absorb && !absorbOn ? absorb.n : embersShown + woodBonus, emberFly = 0, emberT = emberPhase, emberSpawn = Math.min(1, (t - spawnT) / SPAWN_MS), charge = 0, drawT = t, lit = false, m = mood;
+    let mega = 0, emberOut = 1, suck = 0, shockR = 0, crouch = false, wobble = 0;
+    if (absorbOn) {
+      const k = t - absorb.t0, s1 = A_GATHER, s2 = s1 + A_SPIRAL, s3 = s2 + A_HIT;
+      emberN = absorb.n; emberSpawn = 1; m = 'blow'; mega = 1;
+      if (absorb.e0 == null) absorb.e0 = emberPhase;          // 吸いこむ演出は、そのときの回り位置から続ける
+      if (k >= ABSORB_MS) { emberPhase = absorb.e0; absorb = null; mega = 0; embersShown = embersLive; emberN = embersLive; if (pendingReveal) { reveal = { ...pendingReveal, t0: t }; pendingReveal = null; } }
+      else if (k < s1) {                                                                                               // ① ためる：輪が広がり、だんだん速く回る
+        const a = k / s1; emberT = absorb.e0 + (k + 0.25 * k * k / s1) * SPIN_END; emberOut = 1 + 0.15 * Math.sin(a * Math.PI / 2); lit = Math.floor(k / 110) % 2 === 0; crouch = true; m = 'idle'; // 回る速さ：曲の終わりの速さから 1.5倍へ
+      } else if (k < s2) {                                                                                             // ② 吸いこむ
+        emberT = absorb.e0 + (s1 * 1.25 + (k - s1) * 1.5) * SPIN_END; emberFly = (k - s1) / A_SPIRAL; emberOut = 1.15 - 0.15 * Math.min(1, (k - s1) / 400);
+        suck = Math.min(1, (k - s1) / 500); lit = k > s2 - 700 && Math.floor(k / 90) % 2 === 0;
+        if (k > s2 - 1000) { if (!absorb.rumble) { absorb.rumble = true; window.gaugeApi.shake('rumble'); } wobble = 0.35 + 0.4 * (k - (s2 - 1000)) / 1000; } // 吸いこみの終わり：窓ごと、だんだん強くふるえる
+      } else if (k < s3) {                                                                                             // ③ ヒットストップ：絵を止める
+        if (!absorb.hit) { absorb.hit = t; replay('hit'); replay('punch', 'fire'); }
+        drawT = absorb.hit; emberN = 0; charge = 0.6; suck = 1;
+      } else {                                                                                                         // ④ どん
+        if (!absorb.boom) { absorb.boom = true; replay('boom'); window.gaugeApi.shake('boom'); } // 窓ごと、大きくゆれる
+        const b = k - s3; emberN = 0;
+        if (b < 1600) wobble = 1 - b / 1600;               // 炎が左右に大きくゆれて、だんだんおさまる
+        if (!flare) flare = 0.3 + (b / A_BURST) * 0.7;
+        if (b < 250) charge = 0.6;                         // 炎が最大になるまで、ためた大きさのまま（一瞬しぼまないように）
+        if (b < 700) shockR = 3 + (b / 700) * 20;          // 衝撃の輪が、火の中心から外へ
+      }
+    }
+    $('fire').classList.toggle('crouch', crouch);
+    $('box').classList.toggle('lit', lit);
+    $('box').classList.toggle('warm', (flare > 0.3 && flare < 0.9) || charge > 0 || emberFly > 0.3 || (burn && burn.p < 0.85) || (fireLog && fireLog.fly >= 1 && fireLog.lit > 0));
+    const pair = pairOn ? Math.min(1, (t - pairT0) / 1500) : null;
+    geo = window.drawHinoko($('fire'), { stage: fire.stage, mood: m, t: drawT, fill: exhaling || absorbOn ? 0 : fill, span: 30, pair, wood, drop, stamp, onFire: fireLog, flare, burn, burstRing, hop, voice: voiceLv, camp: fire.stage === 4 ? fire.camp || 0 : 0, embers: emberN, emberFly, emberT, emberSpawn, emberFrom: spawnFrom, emberHot: exhaling, charge, mega, emberOut, suck, shock: shockR, wobble }) || geo;
+    view = { wood, fireLog };
+  }, 110);
+  // ---------------- 言葉の層（11/12）：吹き出し → 焼き印、燃えていく札、火の粉にほどける文字 ----------------
+  const fxc = $('fx'), fctx = fxc.getContext('2d');
+  let view = { wood: 0, fireLog: null }, zoomNow = 1, boxW = 200, boxH = 96;
+  const FONT = (size) => `${size}px "DotGothic16", "MS Gothic", monospace`;
+  const FIRE_COLS = ['#ffe08a', '#ffd36e', '#ff9b54', '#ff9b54'];
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  function sizeFx() { // 拡大しても文字がぼやけないように、拡大した大きさで描く
+    const b = $('box'), z = zoomNow * (window.devicePixelRatio || 1), w = b.clientWidth, h = b.clientHeight;
+    const W = Math.max(1, Math.round(w * z)), H = Math.max(1, Math.round(h * z));
+    if (fxc.width !== W || fxc.height !== H) { fxc.width = W; fxc.height = H; }
+    fctx.setTransform(z, 0, 0, z, 0, 0);
+    boxW = w; boxH = h;
+  }
+  const cellXY = (x, y) => [$('fire').offsetLeft + geo.ox + (x + 0.5) * geo.px, $('fire').offsetTop + geo.oy + (y + 0.5) * geo.px]; // 絵のマス → この層の位置
+  const tagCenter = () => [$('fire').offsetLeft + $('fire').width / 2, $('fire').offsetTop + 12];   // 燃えている薪の札：火の絵のいちばん上
+  // 札（黒いふち・白地・黒い字）。lit（0〜1）：左から焦げる（地が橙に、字が焦げ茶に、火の先がちらちら）
+  function tagBox(text, cx, cy, size, t, lit = 0, tail = false) {
+    fctx.font = FONT(size);
+    const tw = fctx.measureText(text).width, padX = size * 0.4, w = tw + padX * 2, h = size * 1.5;
+    const x = Math.max(2, Math.min(boxW - w - 2, cx - w / 2)), y = cy - h / 2;
+    fctx.fillStyle = '#0b0d12'; fctx.fillRect(x - 1.5, y - 1.5, w + 3, h + 3);
+    fctx.fillStyle = '#f2f4f8'; fctx.fillRect(x, y, w, h);
+    if (lit > 0) {
+      const fw = w * lit; fctx.fillStyle = '#ff9b54'; fctx.fillRect(x, y, fw, h);
+      fctx.fillStyle = Math.floor(t / 80) % 2 ? '#ffe08a' : '#ffd36e'; fctx.fillRect(x + fw - 1.5, y, 3, h);
+    }
+    if (tail) { fctx.fillStyle = '#0b0d12'; fctx.fillRect(cx - 3, y + h, 6, 2.5); fctx.fillRect(cx - 1.5, y + h + 2.5, 3, 2.5); fctx.fillStyle = '#f2f4f8'; fctx.fillRect(cx - 1.5, y + h, 3, 2); } // 吹き出しのしっぽ（火の子の方へ）
+    fctx.textBaseline = 'middle';
+    let px = x + padX;
+    for (const ch of text) { const cw = fctx.measureText(ch).width; fctx.fillStyle = lit > 0 && (px + cw / 2 - x) / w < lit ? '#5a2a10' : '#0b0d12'; fctx.fillText(ch, px, y + h / 2 + size * 0.08); px += cw; }
+    return { x, y, w, h };
+  }
+  // ④ ほどける：札の文字の点を1つずつ火の粉にする（左から順に、ふるえてから上へ）。窓の上から出た火の粉は、透明な窓へ渡す
+  let parts = [], riseQ = [], lastRise = 0;
+  function startDissolve(a, t) {
+    window.gaugeApi.rise({ prep: true });
+    const pts = [];
+    if (a.text) {
+      const size = 11, [cx, cy] = tagCenter(), off = document.createElement('canvas'), oc = off.getContext('2d');
+      oc.font = FONT(size);
+      const tw = oc.measureText(a.text).width, padX = size * 0.4, w = tw + padX * 2, h = size * 1.5;
+      const x = Math.max(2, Math.min(boxW - w - 2, cx - w / 2)), y = cy - h / 2;
+      off.width = Math.ceil(w) + 2; off.height = Math.ceil(h) + 2;
+      oc.font = FONT(size); oc.textBaseline = 'middle'; oc.fillStyle = '#000'; oc.fillText(a.text, padX, h / 2 + size * 0.08);
+      const d = oc.getImageData(0, 0, off.width, off.height).data;
+      for (let yy = 0; yy < off.height; yy++) for (let xx = 0; xx < off.width; xx++) if (d[(yy * off.width + xx) * 4 + 3] > 110) pts.push([x + xx, y + yy]);
+      a.tagRect = { x, y, w, h };
+    } else { // 言葉を出さないとき：薪の所から、火の粉だけ
+      const by = window.HINOKO.BURN_Y[Math.max(0, Math.min(4, pairOn ? 4 : fire.stage))];
+      for (let i = 0; i < 40; i++) { const [x, y] = cellXY(-3 + Math.random() * 7, by + Math.random() * 2); pts.push([x, y]); }
+    }
+    while (pts.length > 260) pts.splice((Math.random() * pts.length) | 0, 1);
+    const xs = pts.map((p) => p[0]), x0 = Math.min(...xs), x1 = Math.max(...xs, x0 + 1);
+    parts = parts.concat(pts.map(([x, y]) => ({ x, y, hx: x, hy: y, t0: t, rel: 150 + ((x - x0) / (x1 - x0)) * 700 + rnd(0, 180), vx: rnd(-14, 14), vy: rnd(-25, -8), acc: rnd(80, 150), ph: rnd(0, 6.3), c: (Math.random() * 4) | 0, sz: rnd(1.1, 1.8) })));
+  }
+  let lastF = performance.now();
+  function fxFrame() {
+    requestAnimationFrame(fxFrame);
+    const t = performance.now(), dt = Math.min(0.05, (t - lastF) / 1000); lastF = t;
+    if (!document.body.classList.contains('game') || !fire) { if (fxc.width) fctx.clearRect(0, 0, fxc.width, fxc.height); return; }
+    sizeFx();
+    fctx.clearRect(0, 0, boxW, boxH);
+    // ② 刻む：吹き出しで大きく出る → 薪の帯へ縮んで飛ぶ → 焼き印（小さな湯気）
+    if (anim && anim.kind === 'drop' && anim.text) {
+      const k = t - anim.t0, [wx, wy] = window.HINOKO.woodAt(anim.slot), [bx, by] = cellXY(wx + 2, wy), top = [boxW / 2, 17];
+      if (k < 250) { const q = k / 250, e = 1 + 2.2 * (q - 1) ** 3 + 1.2 * (q - 1) ** 2; tagBox(anim.text, top[0], top[1], Math.max(4, 15 * e), t, 0, true); }   // ぽんと出る
+      else if (k < 1300) tagBox(anim.text, top[0], top[1] + (Math.floor(k / 260) % 2 ? -0.5 : 0.5), 15, t, 0, true);                                  // 読める間（ふわふわ）
+      else if (k < 1800) { const q = (k - 1300) / 500, e = q * q; tagBox(anim.text, top[0] + (bx - top[0]) * e, top[1] + (by - top[1]) * e - Math.sin(Math.PI * q) * 6, 15 * (1 - 0.7 * e), t); } // 縮みながら薪へ
+      else if (k < 2700) {                                                                                                                          // 焼き印：ジュッ（湯気）
+        const q = (k - 1800) / 900;
+        fctx.globalAlpha = Math.max(0, 1 - q * 1.6); tagBox(anim.text, bx, by, 4.5, t, 1); fctx.globalAlpha = 1;
+        fctx.fillStyle = '#a9b3c6';
+        for (let i = 0; i < 3; i++) { const qq = q * 1.3 - i * 0.15; if (qq <= 0 || qq >= 1) continue; fctx.globalAlpha = 1 - qq; fctx.fillRect(bx - 4 + i * 4 + Math.sin(qq * 9 + i) * 1.5, by - 3 - qq * 14, 2.5, 2.5); }
+        fctx.globalAlpha = 1;
+      }
+    }
+    // ③ 燃えていく札：曲の進みに合わせて、左から焦げる
+    const fl = view.fireLog, ftext = anim && anim.kind === 'burn' ? (t - anim.t0 < anim.pre ? anim.text : null) : onFire ? onFire.text : null;
+    if (fl && ftext) { const [cx, cy] = tagCenter(); tagBox(ftext, cx, cy, 11, t, fl.fly >= 1 ? fl.lit : 0); }
+    // ④ ほどける火の粉
+    if (anim && anim.kind === 'burn' && anim.tagRect && t - anim.t0 - anim.pre < 300) { // 札の地が、ぱっと橙に燃えて消える
+      const q = (t - anim.t0 - anim.pre) / 300, r = anim.tagRect;
+      fctx.globalAlpha = 1 - q; fctx.fillStyle = '#ff9b54'; fctx.fillRect(r.x, r.y, r.w, r.h); fctx.globalAlpha = 1;
+    }
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i], age = t - p.t0;
+      if (age < p.rel) { fctx.fillStyle = '#ff9b54'; fctx.fillRect(p.hx + rnd(-0.5, 0.5), p.hy + rnd(-0.5, 0.5), 1.2, 1.2); continue; } // まだ札の形のまま、ふるえる
+      p.vy -= p.acc * dt;
+      p.x += (p.vx + Math.sin(age / 160 + p.ph) * 10) * dt; p.y += p.vy * dt;
+      if (p.y < -2) { if (Math.random() < 0.6) riseQ.push({ u: (p.x + 4) / (boxW + 8), s: p.sz }); parts.splice(i, 1); continue; } // 窓の上から出た → 透明な窓で、画面のいちばん上へ
+      fctx.fillStyle = FIRE_COLS[(p.c + Math.floor(age / 90)) % 4];
+      fctx.fillRect(p.x, p.y, p.sz, p.sz);
+      fctx.fillStyle = '#ff9b54'; fctx.globalAlpha = 0.5; fctx.fillRect(p.x - p.vx * 0.02, p.y + p.sz, p.sz * 0.7, p.sz); fctx.globalAlpha = 1; // 短い尾
+    }
+    if (riseQ.length && t - lastRise > 60) { lastRise = t; window.gaugeApi.rise({ ps: riseQ.splice(0, riseQ.length) }); }
+  }
+  requestAnimationFrame(fxFrame);
+  // いっぱいのときは、3秒に1回だけカクッとふるえる
+  setInterval(() => { if (!full) return; $('box').classList.remove('shake'); void $('box').offsetWidth; $('box').classList.add('shake'); }, 3000);
+  // 雲の所をつかんで動かす。少しでも動かしたら「動かす」、動かさずに離したら「操作パネルを開く」
+  // 動かすのはアプリの側（マウスの位置を直接読む）。ここでは「つかんだ・4px 以上動いた・離した」だけを知らせる
+  let drag = null;
+  $('box').addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || e.target.id === 'x' || e.target.id === 'eye') return;
+    drag = { sx: e.screenX, sy: e.screenY, started: false };
+    $('box').setPointerCapture(e.pointerId); // 窓の外にはみ出しても、離したのを受けとる
+  });
+  $('box').addEventListener('pointermove', (e) => {
+    if (!drag || drag.started) return;
+    if (Math.hypot(e.screenX - drag.sx, e.screenY - drag.sy) < 4) return;
+    drag.started = true;
+    window.gaugeApi.drag('start');
+  });
+  $('box').addEventListener('pointerup', () => { if (!drag) return; const d = drag; drag = null; if (d.started) window.gaugeApi.drag('end'); else window.gaugeApi.openPanel(); });
+  for (const ev of ['pointercancel', 'lostpointercapture']) $('box').addEventListener(ev, () => { if (drag && drag.started) window.gaugeApi.drag('end'); drag = null; });
+  $('eye').addEventListener('click', () => window.gaugeApi.toggleSmoke()); // 画面全体の煙を、出す／隠す
+  $('x').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); window.gaugeApi.hide(); }); // 11/13：押した瞬間に消す（離すのを待たない）
+</script>
+</body>
+</html>

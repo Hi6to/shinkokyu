@@ -1,0 +1,4 @@
+(sym_lib_table
+	(version 7)
+	(lib (name "shinkokyu")(type "KiCad")(uri "${KIPRJMOD}/lib/shinkokyu.kicad_sym")(options "")(descr "シン呼吸の自作の記号"))
+)

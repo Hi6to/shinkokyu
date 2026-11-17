@@ -1,0 +1,6 @@
+gcode/core_case_match.gcode
+gcode/core_dial.gcode
+gcode/core_tpu.gcode
+gcode/adapter.gcode
+gcode/match_sleeve.gcode
+gcode/match_tray.gcode

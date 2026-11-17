@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>シン呼吸 操作パネル</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+<style>
+  /* レトロなゲームの窓：黒い箱＋白い二重の枠 */
+  html, body { margin: 0; height: 100%; background: #0b0d12; color: #f2f4f8; font-family: "DotGothic16", "MS Gothic", monospace; font-size: 15px; user-select: none; }
+  .frame { position: absolute; inset: 3px; border: 2px solid #f2f4f8; outline: 1px solid #f2f4f8; outline-offset: 2px; padding: 10px 12px; overflow: auto; }
+  h1 { font-size: 18px; font-weight: normal; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; }
+  h2 { font-size: 14px; font-weight: normal; color: #a9b3c6; margin: 12px 0 4px; }
+  button, select { font: inherit; background: #0b0d12; color: #f2f4f8; border: 2px solid #f2f4f8; padding: 3px 10px; cursor: pointer; }
+  button:hover, select:hover { background: #f2f4f8; color: #0b0d12; }
+  button.on { background: #f2f4f8; color: #0b0d12; }
+  .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .wide { width: 100%; }
+  .note { color: #a9b3c6; font-size: 13px; margin-top: 4px; line-height: 1.5; white-space: pre-line; }
+  #fillbar { display: flex; gap: 2px; }
+  #fillbar span { width: 18px; height: 10px; background: #2a303c; }
+  #fillbar span.f { background: #c2c9d6; }
+  #x { border: none; padding: 0 4px; font-size: 20px; }
+  input[type=range] { width: 120px; accent-color: #f2f4f8; }
+  #moya { font: inherit; width: 150px; background: #0b0d12; color: #f2f4f8; border: 2px solid #f2f4f8; padding: 3px 6px; user-select: text; }
+</style>
+</head>
+<body>
+<div class="frame">
+  <h1>シン呼吸 <button id="x" title="閉じる" aria-label="閉じる">×</button></h1>
+
+  <!-- 11/11：使わなくなった「画面全体の煙」（見せ方の切り替え・煙を表示／隠す）と「スペースキーで吹く」を消し、並べ直した -->
+  <h2>煙のたまり具合</h2>
+  <div class="row"><div id="fillbar"></div><span id="fillpct"></span></div>
+  <div id="reason" class="note"></div>
+
+  <h2>つなぐ</h2>
+  <div class="row"><button id="connect">本体を探してつなぐ</button><span id="devname" class="note"></span></div>
+  <div id="btlist"></div>
+  <div id="devlist"></div>
+  <div class="row" style="margin-top:4px"><button id="micconnect">声の基板（Sense 版）をつなぐ</button><span id="micname" class="note"></span></div>
+
+  <h2>音量（0 は音なし）</h2>
+  <div class="row"><button id="voldown" aria-label="音量を下げる">−</button><input type="range" id="vol" min="0" max="10" step="1" value="3" aria-label="本体の音量"><button id="volup" aria-label="音量を上げる">＋</button><span id="volnum">3</span></div>
+  <div class="row" style="margin-top:4px"><label><input type="checkbox" id="pcsound"> PC からも音を出す</label><input type="range" id="pcvol" min="0" max="10" step="1" value="6" aria-label="PC の音量"><span id="pcvolnum">6</span></div>
+  <div class="row" style="margin-top:4px"><button id="pctest" class="wide">PC の音を試す（ドレミファソ）</button></div>
+  <div class="note">PC の音は1つ。2台のときは、どちらかが吸っている間に、同じ曲が進む（2人で1曲）</div>
+
+  <h2>もやもや（煙に書く。6文字まで）</h2>
+  <div class="row"><input id="moya" maxlength="6" placeholder="例：急な残業"><button id="addmoya">煙にする</button></div>
+  <div class="row" style="margin-top:6px"><button id="talk" class="wide">押している間 話す（Ctrl+Alt+M でも）</button></div>
+  <div class="row" style="margin-top:4px"><span class="note">基板のマイクの感度</span><select id="micgain">
+    <option value="64">ふつう（+12dB）口の近くで話す</option>
+    <option value="72">高め（+16dB）向かい合って話す</option>
+    <option value="80">最大（+20dB）少しはなれて話す</option>
+  </select></div>
+  <div id="talknote" class="note">話した愚痴を、AI が短い言葉にして煙にする（声も文字も PC の外に出ない）。本体の＋と−の同時押しでも話せる</div>
+  <div id="heard" class="note"></div>
+  <div id="moyalist" class="note"></div>
+  <div class="row" style="margin-top:6px"><span class="note">煙の上の言葉</span><select id="labelsmode">
+    <option value="present">自分がいるときだけ見せる</option>
+    <option value="always">いつも見せる</option>
+    <option value="never">見せない</option>
+  </select></div>
+  <div class="note">1分 PC をさわっていない間は、まわりの人が画面を見るので言葉を消す</div>
+
+  <h2>一服</h2>
+  <div class="row"><button id="invite" class="wide">一服のお誘いを試す（本体の ▶ の長押しと同じ）</button></div>
+
+  <h2>右下の火の子・お知らせ</h2>
+  <div class="row"><button id="gauge" class="wide">右下の煙メーター：出している</button></div>
+  <div class="row" style="margin-top:6px"><span class="note">火の子の大きさ</span><select id="gaugesize">
+    <option value="small">小</option><option value="normal">ふつう</option><option value="large">大</option><option value="xlarge">特大</option><option value="present">発表用</option><option value="present2">発表用・最大</option>
+  </select></div>
+  <div class="row" style="margin-top:6px"><span class="note">お知らせの大きさ</span><select id="noticesize">
+    <option value="small">小</option><option value="normal">ふつう</option><option value="large">大</option><option value="xlarge">特大</option><option value="present">発表用</option><option value="present2">発表用・最大</option>
+  </select></div>
+  <div class="row" style="margin-top:6px"><button id="presentsize" class="wide">発表用の大きさにする（両方）</button></div>
+
+  <h2>心拍数（発表用）</h2>
+  <div class="row"><button id="hrconnect">心拍計をつなぐ</button><button id="hrshow">窓を出す</button></div>
+  <div class="row" style="margin-top:4px"><button id="hrbase">基準を取り直す</button><button id="hrbig">大きくする</button><button id="hroff">切る</button></div>
+  <div id="hrnote" class="note">バンドの「心拍数データの共有（ブロードキャスト）」をオンにしてから押す</div>
+  <h2>発表・ためし</h2>
+  <div class="row"><button id="full">いっぱいにする</button><button id="replay">晴れる様子を早送り</button></div>
+  <div class="row" style="margin-top:6px"><button id="firedemo" class="wide">火の子のためし（約40秒・記録しない）</button></div>
+  <div class="row" style="margin-top:6px"><button id="firereset" class="wide">火の子を最初（火種）に戻す</button></div>
+  <div class="row" style="margin-top:6px"><button id="firerestore" class="wide" hidden>元の育ち具合に戻す</button></div>
+  <div class="row" style="margin-top:6px"><button id="keyblow" class="wide">押している間 吸う（スペースキーでも）</button></div>
+  <div class="note">この窓を開いている間、スペースキーを押している間が「吸っている」。本体をつないでいても、その1曲はキーで進む（本体の音は鳴らない）。キーの息では火は育たないが、残り火はたまる</div>
+  <div class="row" style="margin-top:6px"><span class="note">煙がたまる速さ</span>
+    <select id="fill">
+      <option value="0.5">30秒（発表用）</option>
+      <option value="5">5分</option>
+      <option value="60">60分</option>
+      <option value="90">90分</option>
+    </select>
+  </div>
+
+  <h2>休憩の実験（約10分）</h2>
+  <div class="row"><button id="trial" class="wide">始める（Ctrl+Alt+R）</button></div>
+  <div class="row" style="margin-top:6px"><button id="trialquit" class="wide" hidden>実験をやめる（窓を強制的に閉じる）</button></div>
+  <div id="exp" class="note">実験（約10分）か、反応テストだけ（3分）を選べる</div>
+
+  <h2>記録（この PC の中だけ）</h2>
+  <div id="rhythm" class="note">記録を始めています…</div>
+  <div class="row" style="margin-top:4px"><button id="logs">記録のフォルダを開く</button></div>
+
+  <div class="row" style="margin-top:12px; justify-content:flex-end"><button id="quit">終わる</button></div>
+</div>
+<script src="sense-mic.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const send = (cmd, arg) => window.panelApi.send(cmd, arg);
+  let st = {};
+  for (let i = 0; i < 10; i++) $('fillbar').appendChild(document.createElement('span'));
+  $('x').onclick = () => send('close');
+  $('firedemo').onclick = () => send('firedemo');
+  // 11/12：最初に戻すのは、押しまちがえないように2回押したときだけ（1回目で「もう一度押すと戻す」になり、4秒で元の表示に戻る）
+  let resetArm = 0;
+  $('firereset').onclick = () => {
+    if (Date.now() - resetArm < 4000) { resetArm = 0; send('firereset'); $('firereset').textContent = '火の子を最初（火種）に戻す'; return; }
+    resetArm = Date.now(); $('firereset').textContent = 'もう一度押すと、火種に戻します';
+    setTimeout(() => { if (resetArm && Date.now() - resetArm >= 4000) { resetArm = 0; $('firereset').textContent = '火の子を最初（火種）に戻す'; } }, 4100);
+  };
+  $('firerestore').onclick = () => send('firerestore');
+  // 11/11：スペースキー（またはボタンを押している間）＝吹いている。文字を入れている所では、ふつうのスペース
+  let keyBlowing = false;
+  const keyBlow = (on) => { if (on === keyBlowing) return; keyBlowing = on; $('keyblow').classList.toggle('on', on); send('keyBreath', on); };
+  const typing = (e) => /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && e.target.type !== 'range';
+  addEventListener('keydown', (e) => { if (e.code !== 'Space' || typing(e)) return; e.preventDefault(); if (!e.repeat) keyBlow(true); }, true);
+  addEventListener('keyup', (e) => { if (e.code !== 'Space' || typing(e)) return; e.preventDefault(); keyBlow(false); }, true);
+  addEventListener('blur', () => keyBlow(false)); // 窓が閉じた・ほかを押した：吹くのをやめる
+  $('keyblow').addEventListener('pointerdown', (e) => { $('keyblow').setPointerCapture(e.pointerId); keyBlow(true); });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) $('keyblow').addEventListener(ev, () => keyBlow(false));
+  $('connect').onclick = () => { $('devname').textContent = 'さがしています…'; send('connect'); };
+  // 11/12：見つかった本体を一覧に出して、押した台につなぐ。呼び名があれば呼び名で出す
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  // 11/12 夜：探している間、Windows は見つかった本体を1秒に何回も知らせてくる。前は届くたびに一覧を作り直していたので、
+  //   ボタンを押して離すまでの間にボタンが入れかわり、押しても反応しないことがあった
+  //   → 一覧は、新しい台が見つかったときだけ1行足す（前の行はそのまま）。押したら、そのあとは一覧を変えない
+  const btBox = $('btlist');
+  let btPicking = false;
+  btBox.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b || btPicking) return;
+    if (b.id === 'btcancel') { send('btpick', ''); return; }
+    btPicking = true;
+    for (const x of btBox.querySelectorAll('button')) x.disabled = true;
+    b.textContent = 'つないでいます…'; $('devname').textContent = 'つないでいます…';
+    send('btpick', b.dataset.id);
+  });
+  window.panelApi.onBtList((list) => {
+    if (!list) { btBox.innerHTML = ''; btPicking = false; if ($('devname').textContent === 'さがしています…') $('devname').textContent = ''; return; }
+    if (btPicking) return;
+    const msg = list.length ? 'つなぐ台を押してください' : 'さがしています…（本体の電源を入れて、近くに置く）';
+    if ($('devname').textContent !== msg) $('devname').textContent = msg;
+    if (!$('btcancel')) btBox.insertAdjacentHTML('beforeend', `<div class="row" style="margin-top:4px"><button id="btcancel">探すのをやめる</button></div>`);
+    const have = new Set([...btBox.querySelectorAll('.pick')].map((b) => b.dataset.id));
+    for (const d of list) {
+      if (have.has(d.id)) continue;
+      $('btcancel').parentElement.insertAdjacentHTML('beforebegin', `<div class="row" style="margin-top:4px"><button class="pick" data-id="${esc(d.id)}">つなぐ</button><span class="note">${d.nick ? `<b>${esc(d.nick)}</b>（${esc(d.name)}）` : esc(d.name)}</span></div>`);
+    }
+  });
+  // つながっている台：呼び名・光らせる・切る
+  let devSig = '';
+  function showDevList(s) {
+    const nick = (s.settings && s.settings.deviceNames) || {}, live = (s.devices || []).filter((d) => d.connected);
+    const sig = live.map((d) => d.name + '=' + (nick[d.name] || '')).join('|');
+    if (sig === devSig || document.activeElement && document.activeElement.classList.contains('nick')) return; // 呼び名を入れている途中は作り直さない
+    devSig = sig;
+    $('devlist').innerHTML = live.map((d) => `<div style="margin-top:6px"><div class="row"><button class="light" data-name="${esc(d.name)}">光らせる</button><button class="unplug" data-name="${esc(d.name)}">切る</button><span class="note">${nick[d.name] ? `<b>${esc(nick[d.name])}</b>（${esc(d.name)}）` : esc(d.name)}</span></div>`
+      + `<div class="row" style="margin-top:3px"><span class="note">呼び名</span><input class="nick" data-name="${esc(d.name)}" maxlength="12" placeholder="例：1台目" value="${esc(nick[d.name] || '')}" style="width:10em"></div></div>`).join('');
+    for (const el of $('devlist').querySelectorAll('.nick')) el.onchange = () => send('devnick', { name: el.dataset.name, nick: el.value.trim() });
+    for (const el of $('devlist').querySelectorAll('.light')) el.onclick = () => send('devlight', el.dataset.name);
+    for (const el of $('devlist').querySelectorAll('.unplug')) el.onclick = () => send('devunplug', el.dataset.name);
+  }
+  $('full').onclick = () => send('full');
+  $('replay').onclick = () => send('replay');
+  $('quit').onclick = () => send('quit');
+  $('logs').onclick = () => send('logs');
+  $('invite').onclick = () => send('invite');
+  $('labelsmode').onchange = () => send('labels', $('labelsmode').value);
+  $('gaugesize').onchange = () => send('gaugesize', $('gaugesize').value);
+  $('noticesize').onchange = () => send('noticesize', $('noticesize').value);
+  $('presentsize').onclick = () => send('presentsize', !(st.settings && st.settings.gaugeSize === 'present' && st.settings.noticeSize === 'present'));
+  $('gauge').onclick = () => send('gauge', !(st.settings && st.settings.gauge));
+  $('trial').onclick = () => send('trial');
+  $('trialquit').onclick = () => send('trialquit');
+  const addMoya = () => { const v = $('moya').value.trim(); if (!v) return; send('moya', v); $('moya').value = ''; $('moya').focus(); };
+  $('addmoya').onclick = addMoya;
+  $('moya').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) addMoya(); }); // 日本語の変換中の Enter では出さない
+  $('fill').onchange = () => send('fill', $('fill').value);
+  let volTouched = 0;
+  const setVol = (v) => { v = Math.max(0, Math.min(10, v)); $('vol').value = v; $('volnum').textContent = v; volTouched = Date.now(); send('volume', v); }; // 11/12：最大 8 → 10
+  $('vol').oninput = () => ($('volnum').textContent = $('vol').value);
+  // 11/13：PC からも音を出す
+  let pcTouched = 0;
+  const sendPc = () => { pcTouched = Date.now(); $('pcvolnum').textContent = $('pcvol').value; send('pcsound', { on: $('pcsound').checked, vol: +$('pcvol').value }); };
+  $('pcsound').onchange = sendPc;
+  $('pcvol').oninput = () => ($('pcvolnum').textContent = $('pcvol').value);
+  $('pcvol').onchange = () => { if (+$('pcvol').value > 0) $('pcsound').checked = true; sendPc(); }; // PC の音量を動かしたら、出す設定にする
+  $('pctest').onclick = () => send('pctest');
+  $('vol').onchange = () => setVol(+$('vol').value);
+  $('voldown').onclick = () => setVol(+$('vol').value - 1);
+  $('volup').onclick = () => setVol(+$('vol').value + 1);
+
+  // ---------------- 声を録る（PC のマイク。16kHz・1チャンネルの WAV にしてアプリに渡す） ----------------
+  let rec = null;
+  const mic = new SenseMic(); // Sense 版の基板（つながっていれば、PC のマイクの代わりに使う）
+  function talkUi(on, via) {
+    $('talk').classList.toggle('on', on);
+    $('talk').textContent = !on ? '押している間 話す（Ctrl+Alt+M でも）' : via === 'key' ? '聞いています（Ctrl+Alt+M で終わる）' : via === 'device' ? '聞いています（本体の＋−同時押しで終わる）' : via === 'sense-button' ? '聞いています（基板のボタンをはなすと終わる）' : '聞いています（はなすと終わる）';
+  }
+  // 11/12：話している間の声の大きさを、右下の火の子へ（1秒に8回まで。0〜1）。rms を full で割る（PC のマイク 0.08、声の基板 0.03 で 1）
+  let lastLevel = 0;
+  function sendLevel(x, full) {
+    const t = performance.now(); if (t - lastLevel < 120) return; lastLevel = t;
+    let s = 0; for (let i = 0; i < x.length; i++) s += x[i] * x[i];
+    window.panelApi.voiceLevel(Math.min(1, Math.sqrt(s / Math.max(1, x.length)) / full));
+  }
+  mic.addEventListener('level', (e) => { if (rec && rec.sense) { const t = performance.now(); if (t - lastLevel < 120) return; lastLevel = t; window.panelApi.voiceLevel(Math.min(1, e.detail.rms / 0.03)); } });
+  // 11/15 朝：声の基板が返事をしない間は、PC のマイクで録る（基板はつなぎ直している）
+  let micBadUntil = 0;
+  function micStuck(why) {
+    micBadUntil = Date.now() + 20000;
+    window.panelApi.log('mic_stuck', { why });
+    mic.kick();
+  }
+  mic.addEventListener('connect', () => { micBadUntil = 0; });
+  async function talkStart(via) {
+    if (rec) return;
+    if (mic.connected && Date.now() > micBadUntil) { // Sense 版で録る
+      rec = { sense: true, via, t0: Date.now(), timer: setTimeout(talkStop, 31000) }; // 基板は30秒で自分で止まる
+      mic.rec(true);
+      // 11/15：基板から「はじめ」が届かなければ（REC 1 が届かなかった）、もう一度頼む
+      { const r = rec; r.startCheck = setTimeout(() => { if (rec === r && !r.stopping && !mic.take) { mic.rec(true); window.panelApi.log('mic_resend', { cmd: 'REC 1' }); } }, 1500);
+        // 11/15 朝：3秒たっても「はじめ」が届かない＝基板が返事をしていない。PC のマイクに切りかえて録り直す（基板はつなぎ直す）
+        r.stuckCheck = setTimeout(async () => {
+          if (rec !== r || r.stopping || mic.take) return;
+          clearTimeout(r.timer); rec = null; micStuck('no_start');
+          await talkStart(via);
+          if (rec) $('talknote').textContent = '声の基板が返事をしないので、PC のマイクで聞いています（基板はつなぎ直し中）';
+        }, 3000);
+      }
+      window.panelApi.voiceStart(via);
+      talkUi(true, via);
+      return;
+    }
+    rec = { starting: true };
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      const ctx = new AudioContext({ sampleRate: 16000 });
+      const src = ctx.createMediaStreamSource(stream), proc = ctx.createScriptProcessor(4096, 1, 1), chunks = [];
+      proc.onaudioprocess = (e) => { const x = new Float32Array(e.inputBuffer.getChannelData(0)); chunks.push(x); sendLevel(x, 0.08); };
+      src.connect(proc); proc.connect(ctx.destination); // 出す音は0のまま（スピーカーからは鳴らない）
+      const stop = rec.stop; // 録り始める前に「おわり」が来ていた
+      rec = { stream, ctx, proc, chunks, via, t0: Date.now(), timer: setTimeout(talkStop, 30000) }; // 30秒で自動で終わる
+      window.panelApi.voiceStart(via);
+      talkUi(true, via);
+      if (stop) talkStop();
+    } catch (err) {
+      rec = null;
+      $('talknote').textContent = 'マイクが使えませんでした（Windows の設定で、マイクを使ってよいか確かめる）：' + err.message;
+    }
+  }
+  async function talkStop() {
+    if (!rec) return;
+    if (rec.starting) { rec.stop = true; return; }
+    if (rec.sense) { // Sense 版：止めてと頼み、「おわり」が届いたら続きをする（下の mic の 'end'）
+      if (rec.stopping) return;
+      const r = rec;
+      r.stopping = true; r.stopAt = Date.now(); r.resent = 0; clearTimeout(r.timer); clearTimeout(r.startCheck); clearTimeout(r.stuckCheck);
+      mic.rec(false);
+      talkUi(false); $('talknote').textContent = '声を受けとっています…';
+      window.panelApi.voiceStopping(); // 11/15：押したことを、すぐ画面に出す
+      // 11/15：前は8秒「おわり」を待ってあきらめ、録った声を捨てていた（本体2台もつないで Bluetooth が混むと、REC 0 が基板に届かないことがあった）。
+      //   ・止めたのに声が届き続けている＝REC 0 が届いていない：1.5秒ごとにもう一度頼む（3回まで）
+      //   ・声が2.5秒届かない、または止めてから12秒：そこまでに届いた声で文字にする（捨てない）
+      r.watch = setInterval(() => {
+        if (rec !== r) { clearInterval(r.watch); return; }
+        const now = Date.now(), quiet = now - mic.lastFrameAt;
+        if (mic.take && quiet < 600 && now - (r.lastSend || r.stopAt) > 1500 && r.resent < 3) { r.resent++; r.lastSend = now; mic.rec(false); window.panelApi.log('mic_resend', { cmd: 'REC 0', n: r.resent }); }
+        if ((quiet > 2500 && now - r.stopAt > 2500) || now - r.stopAt > 9000) {
+          clearInterval(r.watch); rec = null;
+          const part = trimAfterStop(mic.takeSoFar(), r);
+          if (r.resent >= 3) micStuck('no_stop'); else mic.rec(false); // 11/15 朝：3回頼んでも止まらない基板は、つなぎ直して元にもどす
+          if (part && part.samples.length / part.rate >= 0.6) {
+            window.panelApi.log('voice_partial', { waitMs: now - r.stopAt, resent: r.resent, sec: +(part.samples.length / part.rate).toFixed(1) });
+            finish([part.samples], part.rate, part.samples.length / part.rate, r.via === 'sense-button' ? 'sense-button' : 'sense', 0.006, { lost: part.lost, partial: true });
+          } else {
+            window.panelApi.voiceCancel({ why: 'noend', resent: r.resent, waitMs: now - r.stopAt });
+            $('talknote').textContent = '声の基板から、声が届きませんでした（もう一度話す。だめなら基板をつなぎ直す）';
+          }
+        }
+      }, 250);
+      return;
+    }
+    const r = rec; rec = null; clearTimeout(r.timer);
+    talkUi(false);
+    r.proc.disconnect(); r.stream.getTracks().forEach((t) => t.stop());
+    const rate = r.ctx.sampleRate; await r.ctx.close();
+    await finish(r.chunks, rate, (Date.now() - r.t0) / 1000, r.via, 0.015);
+  }
+  // 録り終えた声を、アプリに渡して煙のラベルにする
+  async function finish(chunks, rate, sec, via, quiet, extra = {}) {
+    if (sec < 0.6) { window.panelApi.voiceCancel({ why: 'short', via, sec: +sec.toFixed(2) }); $('talknote').textContent = '短すぎました（ボタンを押したまま話して、話し終わったらはなす）'; return; } // 押しまちがい
+    // 声がない（音が小さいまま）ときは、文字にしない（Whisper は無音から「ご視聴ありがとうございました」などを作ってしまうため）
+    // 0.1秒ごとの音の大きさを見て、「その場の雑音」（静かな方から2割の所）の3倍より大きい所だけを声とみなす
+    const all = resample(chunks, rate, rate), hop = Math.round(rate / 10), levels = [];
+    for (let i = 0; i + hop <= all.length; i += hop) { let s = 0; for (let k = i; k < i + hop; k++) s += all[k] * all[k]; levels.push(Math.sqrt(s / hop)); }
+    const floor = [...levels].sort((a, b) => a - b)[Math.floor(levels.length * 0.2)] || 0;
+    const thr = Math.max(quiet, Math.min(floor * 2.5, 0.03)), top = Math.max(0, ...levels); // ずっと話していても声とみなせるように、上限 0.03（はなれた声も拾う）
+    const voiced = levels.filter((l) => l > thr).length / 10;
+    if (voiced < 0.4) {
+      window.panelApi.voiceCancel({ why: 'quiet', via, gain: String(via).startsWith('sense') ? +$('micgain').value : undefined, sec: +sec.toFixed(1), floor: +floor.toFixed(4), thr: +thr.toFixed(4), top: +top.toFixed(4), voiced });
+      $('talknote').textContent = `声が聞こえませんでした（いちばん大きい所 ${top.toFixed(3)}／声とみなす目安 ${thr.toFixed(3)}）。マイクに近づいて、もう一度`;
+      return;
+    }
+    window.panelApi.log('voice_level', { via, gain: String(via).startsWith('sense') ? +$('micgain').value : undefined, floor: +floor.toFixed(4), thr: +thr.toFixed(4), top: +top.toFixed(4), voiced }); // 目安を合わせるための数字
+    $('talknote').textContent = 'ことばにしています…';
+    const x = resample(chunks, rate, 16000);
+    // 低い「ブーン」という雑音（100Hz より下）を消す。基板のマイクで目立つ
+    { const a = 1 / (1 + 2 * Math.PI * 100 / 16000); let py = 0, px = x[0] || 0; for (let i = 0; i < x.length; i++) { const v = x[i]; py = a * (py + v - px); px = v; x[i] = py; } }
+    // 小さい声は、大きくしてから渡す（最大8倍）
+    let peak = 0; for (let i = 0; i < x.length; i++) peak = Math.max(peak, Math.abs(x[i]));
+    const g = peak > 0 ? Math.min(8, 0.9 / peak) : 1;
+    if (g > 1.1) for (let i = 0; i < x.length; i++) x[i] *= g;
+    const res = await window.panelApi.voice(encodeWav(x, 16000), { sec: +sec.toFixed(1), via, ...extra });
+    const ls = (res.labels || []).map((l) => `「${l}」`).join('');
+    $('talknote').textContent = ls ? `${ls}を煙にしました${res.by === 'simple' ? '（AI が使えず、簡単なやり方で）' : ''}` : `うまくいきませんでした：${res.error}`;
+    $('heard').textContent = [
+      `聞きとった文（${res.model || ''}${res.logprob != null ? '・自信 ' + res.logprob : ''}）：${res.text || '（なし）'}`,
+      ...(res.others || []).map((o) => `くらべ（${o.name}${o.sec != null ? '・' + o.sec + '秒' : ''}${o.logprob != null ? '・自信 ' + o.logprob : ''}）：${o.text || '（なし）'} → ${(o.labels || []).map((l) => `「${l}」`).join('') || '―'}`),
+    ].filter(Boolean).join('\n');
+  }
+  // Sense 版の基板
+  $('micconnect').onclick = async () => {
+    $('micname').textContent = 'さがしています…';
+    try { await mic.connect(); } catch (err) { $('micname').textContent = '見つかりませんでした（基板の電源と、近くにあるかを確かめる）'; }
+  };
+  // マイクの感度：基板に「GAIN n」を送る（0x28 が 0dB、1増えるごとに +0.5dB）。選んだものは覚えておき、つないだときにも送る
+  const savedGain = (() => { try { return localStorage.getItem('micgain'); } catch { return null; } })();
+  if (savedGain) $('micgain').value = savedGain;
+  const sendGain = () => { if (mic.connected) mic.send(`GAIN ${$('micgain').value}`); };
+  $('micgain').onchange = () => { try { localStorage.setItem('micgain', $('micgain').value); } catch {} sendGain(); window.panelApi.log('mic_gain', { gain: +$('micgain').value }); };
+  mic.addEventListener('connect', () => setTimeout(sendGain, 300));
+  mic.addEventListener('connect', (e) => { window.panelApi.log('mic_connect', { name: e.detail.name }); $('micname').textContent = `${e.detail.name} とつながっている（話す声はこの基板から）`; $('micconnect').textContent = '声の基板をつなぎ直す'; });
+  mic.addEventListener('disconnect', () => { window.panelApi.log('mic_disconnect'); $('micname').textContent = '声の基板が切れた（近づけば、自動でつなぎ直す。その間は PC のマイク）'; });
+  mic.addEventListener('start', (e) => { // 基板のボタンで録り始めた
+    if (rec || e.detail.by !== 1) return;
+    rec = { sense: true, via: 'sense-button', t0: Date.now() };
+    window.panelApi.voiceStart('sense-button'); talkUi(true, 'sense-button');
+  });
+  mic.addEventListener('end', async (e) => {
+    const r = rec; rec = null;
+    if (!r || !r.sense) return;
+    clearTimeout(r.timer); clearTimeout(r.startCheck); clearTimeout(r.stuckCheck); clearInterval(r.watch); talkUi(false);
+    if (r.stopAt) window.panelApi.log('voice_end_wait', { ms: Date.now() - r.stopAt, resent: r.resent || 0 }); // 11/15：おわりを押してから、基板の「おわり」が届くまで
+    const d = trimAfterStop(e.detail, r);
+    await finish([d.samples], d.rate, d.samples.length / d.rate, r.via === 'sense-button' ? 'sense-button' : 'sense', 0.006, { lost: d.lost, dropped: d.dropped });
+  });
+  // 11/15：おわりを押した後に届いた声（止まるまでの間の雑音）は切る。基板が録り始めるまでの遅れを見て、押した時刻から1.5秒までは残す
+  function trimAfterStop(d, r) {
+    if (!d || !r || !r.stopAt || !d.samples) return d;
+    const keep = Math.round(((r.stopAt - r.t0) / 1000 + 1.5) * d.rate);
+    return keep < d.samples.length ? { ...d, samples: d.samples.subarray(0, keep) } : d;
+  }
+  function resample(chunks, from, to) {
+    const n = chunks.reduce((s, c) => s + c.length, 0), x = new Float32Array(n);
+    let o = 0; for (const c of chunks) { x.set(c, o); o += c.length; }
+    if (from === to) return x;
+    const m = Math.floor(n * to / from), y = new Float32Array(m);
+    for (let i = 0; i < m; i++) { const p = i * from / to, k = Math.floor(p), f = p - k; y[i] = (x[k] || 0) * (1 - f) + (x[k + 1] || 0) * f; }
+    return y;
+  }
+  function encodeWav(x, rate) {
+    const buf = new ArrayBuffer(44 + x.length * 2), v = new DataView(buf);
+    const w = (o, s) => [...s].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+    w(0, 'RIFF'); v.setUint32(4, 36 + x.length * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    w(36, 'data'); v.setUint32(40, x.length * 2, true);
+    for (let i = 0, o = 44; i < x.length; i++, o += 2) { const s = Math.max(-1, Math.min(1, x[i])); v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true); }
+    return buf;
+  }
+  $('talk').addEventListener('pointerdown', (e) => { e.preventDefault(); talkStart('button'); });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) $('talk').addEventListener(ev, () => { if (rec && rec.via !== 'key' && rec.via !== 'device') talkStop(); });
+  window.panelApi.onVoice((cmd) => {
+    if (cmd === 'toggle') (rec ? talkStop() : talkStart('key'));
+    else if (cmd === 'toggle-device') (rec ? talkStop() : talkStart('device')); // 本体の＋−同時押し（11/11）
+  });
+
+  window.panelApi.onState((s) => {
+    st = s;
+    const f = Math.round((s.fill || 0) / 10);
+    [...$('fillbar').children].forEach((el, i) => el.classList.toggle('f', i < f));
+    $('fillpct').textContent = ` ${s.fill || 0}%`;
+    const live = (s.devices || []).filter((d) => d.connected), nk = (s.settings && s.settings.deviceNames) || {};
+    showDevList(s);
+    if (!$('btlist').innerHTML && live.length) $('devname').textContent = live.map((d) => nk[d.name] || d.name).join('、') + ' とつながっている';
+    else if ((s.devices || []).length) $('devname').textContent = '切れた（近づけば、自動でつなぎ直す）';
+    if (Number.isFinite(s.volume) && Date.now() - volTouched > 1500) { $('vol').value = s.volume; $('volnum').textContent = s.volume; }
+    if (s.fillMin && document.activeElement !== $('fill')) $('fill').value = String(s.fillMin);
+    $('moyalist').textContent = (s.moya || []).length ? '煙の上：' + s.moya.map((m) => `「${m}」`).join('') : '';
+    $('trialquit').hidden = !s.trialOpen;
+    if (s.trialKey) $('trial').textContent = s.trialOpen ? '実験の窓を出す' : `始める（${s.trialKey}）`;
+    $('exp').textContent = `実験（約10分）か、反応テストだけ（3分）を選べる。きょう：実験 ${s.trialToday || 0} 回・反応テストだけ ${s.soloToday || 0} 回`;
+    if (s.settings) {
+      if (document.activeElement !== $('labelsmode')) $('labelsmode').value = s.settings.labels;
+      if (document.activeElement !== $('gaugesize')) $('gaugesize').value = s.settings.gaugeSize || 'normal';
+      if (Date.now() - pcTouched > 1500) { const pc = s.settings.pcSound || {}; $('pcsound').checked = !!pc.on; $('pcvol').value = Number.isFinite(pc.vol) ? pc.vol : 6; $('pcvolnum').textContent = $('pcvol').value; }
+      if (document.activeElement !== $('noticesize')) $('noticesize').value = s.settings.noticeSize || 'normal';
+      const bk = s.settings.fireBackup;
+      $('firerestore').hidden = !bk;
+      if (bk) $('firerestore').textContent = `元の育ち具合に戻す（いまは ${s.fireName || '火種'}）`;
+      const pres = s.settings.gaugeSize === 'present' && s.settings.noticeSize === 'present';
+      $('presentsize').textContent = pres ? 'ふつうの大きさに戻す（両方）' : '発表用の大きさにする（両方）'; $('presentsize').classList.toggle('on', pres);
+      $('gauge').textContent = s.settings.gauge ? '右下の煙メーター：出している（押すと消す）' : '右下の煙メーター：消している（押すと出す）';
+      $('gauge').classList.toggle('on', !!s.settings.gauge);
+    }
+    const why = s.reason;
+    $('reason').textContent = !why ? '' : [
+      `つづけて作業：${why.minutes}分（国の目安は1時間ごとに10〜15分の休み）`,
+      why.baselineReady ? `ふだんとのちがい：${why.top ? `${why.top.label} ${why.top.ratio.toFixed(1)}倍` : '―'}` : 'ふだんとのちがい：記録が1時間分たまってから出します',
+    ].join('\n');
+    const r = s.rhythm;
+    if (r) $('rhythm').textContent = `直近1分：キー ${r.keys}回・打ち直し ${r.corrRate == null ? '―' : Math.round(r.corrRate * 100) + '%'}・手が止まった ${r.pauses}回`;
+  });
+</script>
+<script>
+// 11/14：心拍数の窓（つなぐ・出す・基準を取り直す・大きくする・切る）
+(() => {
+  const $ = (id) => document.getElementById(id), send = (c, a) => window.panelApi.send(c, a);
+  let hrSt = {};
+  $('hrconnect').onclick = () => send('hrconnect');
+  $('hrshow').onclick = () => send('hrshow', !(hrSt.settings && hrSt.settings.hrShow));
+  $('hrbase').onclick = () => send('hrbase');
+  $('hrbig').onclick = () => send('hrbig', !(hrSt.settings && hrSt.settings.hrBig));
+  $('hroff').onclick = () => send('hroff');
+  window.panelApi.onState((s) => {
+    hrSt = s || {}; const st = hrSt.settings || {}, h = hrSt.hr || {};
+    $('hrshow').textContent = st.hrShow ? '窓を消す' : '窓を出す'; $('hrshow').classList.toggle('on', !!st.hrShow);
+    $('hrbig').textContent = st.hrBig ? 'ふつうの大きさ' : '大きくする'; $('hrbig').classList.toggle('on', !!st.hrBig);
+    $('hrnote').textContent = (h.text || 'つないでいません') + (h.name ? `（${h.name}）` : '') + (h.bpm ? `　いま ${h.bpm} bpm` : '') + (h.base ? `　はじめ ${h.base}` : '') + (h.bpm ? '' : '\nバンドの「心拍数データの共有（ブロードキャスト）」をオンにしてから押す');
+  });
+})();
+</script>
+</body>
+</html>

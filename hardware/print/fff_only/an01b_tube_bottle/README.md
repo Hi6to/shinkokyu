@@ -1,0 +1,17 @@
+# 案1 筒・ペットボトル形（本体 → 丸い肩 → キャップ）（すべて FFF）
+
+プリンター：**Creality Ender-3 V3 SE**（キカイノイエ）。G-code を SD カードに入れて刷る。
+上から順番に1枚ずつ刷る（材料が変わる板は、フィラメントを入れ替える）。G-code は [`../../gcode/`](../../gcode/) にある（ほかの案と同じ板は共通）。
+
+SD カードにまとめてコピーする：`python3 make_print.py --sd fff_only an01b_tube_bottle <SDカードの場所>`（hardware/print で）
+
+| 順 | ファイル | 材料 | 中身 | 時間（見積もり） | 量 |
+|---|---|---|---|---|---|
+| 1 | [`bottle_tube.gcode`](../../gcode/bottle_tube.gcode) | PETG | 案1 ペットボトル形の筒：上の殻 A・下の殻 B（今と同じ）・前の部屋 C（先がカップ）・リング E・キャップ F・押し棒 3本 | 1h 46m 40s | 20 g |
+| 2 | [`bottle_tpu.gcode`](../../gcode/bottle_tpu.gcode) | TPU 95A | TPU：USB のふた G・ストローをつかむ筒 ⑥ 2個（ペットボトル形） | 14m 24s | 1 g |
+| 3 | [`bottle_adapter.gcode`](../../gcode/bottle_adapter.gcode) | PETG（0.12mm） | ペットボトル形の吹き口：肩 ②・キャップ ⑤ を2組。層 0.12mm・中まで 100% | 2h 43m 25s | 16 g |
+
+合計（すべて）：約 **4.7 時間・37 g**。キカイノイエの料金はフィラメント持ちこみで 330円/時 → 約 1,650 円（店のフィラメントなら 550円/時）。
+時間は PrusaSlicer の見積もりで、実際とずれることがある。
+
+部品の説明・組み立て・気をつけることは [../../README.md](../../README.md)。

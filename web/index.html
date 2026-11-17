@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>シン呼吸 本体モニター</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --ink: #1d232b; --muted: #66707c; --line: #dfe3e8;
+    --exhale: #2f7fd1; --inhale: #8a6bd1; --idle: #9aa3ad; --ok: #2e9a5e; --warn: #c9822b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14171b; --card: #1d2228; --ink: #e8ecf0; --muted: #9aa5b1; --line: #2e353d; --idle: #6b7580; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 20px 16px 40px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 16px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  button { font: inherit; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--exhale); border-color: var(--exhale); color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-top: 12px; }
+  .conn { color: var(--muted); }
+  .conn.on { color: var(--ok); font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .big { font-size: 32px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .label { color: var(--muted); font-size: 13px; }
+  .state-exhale { color: var(--exhale); }
+  .state-inhale { color: var(--inhale); }
+  .state-idle { color: var(--idle); }
+  canvas { width: 100%; height: 180px; display: block; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; font-size: 13px; }
+  details summary { cursor: pointer; color: var(--muted); }
+  pre { margin: 8px 0 0; max-height: 220px; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+  .notice { color: var(--warn); }
+</style>
+</head>
+<body>
+<main>
+  <h1>シン呼吸 本体モニター</h1>
+  <p class="sub">本体と Bluetooth でつながり、息と曲の様子を見る（S01）。Chrome か Edge で開く。</p>
+
+  <div class="row">
+    <button id="connect" class="primary">本体につなぐ</button>
+    <button id="disconnect" disabled>切る</button>
+    <span id="conn" class="conn">つながっていない</span>
+  </div>
+  <p id="support" class="notice" hidden>このブラウザでは Bluetooth が使えません。PC の Chrome か Edge で開いてください（http://localhost から開く）。</p>
+
+  <section class="card grid" aria-live="polite">
+    <div><div class="label">いま</div><div id="state" class="big state-idle">―</div></div>
+    <div><div class="label">気圧の差（Pa）</div><div id="dp" class="big">―</div></div>
+    <div><div class="label">曲の位置</div><div id="pos" class="big">―</div></div>
+    <div><div class="label">音のモード・音量</div><div id="mode" class="big">―</div></div>
+  </section>
+
+  <section class="card">
+    <div class="label">気圧の差（直近15秒。青いところが「吐いている」）</div>
+    <canvas id="chart" width="820" height="180" role="img" aria-label="気圧の差のグラフ"></canvas>
+  </section>
+
+  <section class="card">
+    <div class="label">息の記録</div>
+    <table>
+      <thead><tr><th>時刻</th><th>種類</th><th>長さ</th><th>いちばん強いところ</th></tr></thead>
+      <tbody id="breaths"></tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>本体から届いた行（調べるとき用）</summary>
+      <pre id="log"></pre>
+    </details>
+  </section>
+</main>
+
+<script type="module">
+import { ShinkokyuDevice, bluetoothAvailable } from './device.js';
+
+const $ = (id) => document.getElementById(id);
+const dev = new ShinkokyuDevice();
+window.dev = dev; // 調べるとき用
+const MODE_JA = { flute: '笛', bubble: '泡', musicbox: 'オルゴール', fx: '効果音' };
+const STATE_JA = { exhale: '吐いている', inhale: '吸っている', idle: '休んでいる' };
+const history = []; // [時刻ms, dP, 状態]
+const logLines = [];
+
+if (!bluetoothAvailable()) {
+  $('support').hidden = false;
+  $('connect').disabled = true;
+}
+
+$('connect').addEventListener('click', async () => {
+  try {
+    $('conn').textContent = 'つないでいる…';
+    await dev.connect();
+  } catch (e) {
+    $('conn').textContent = 'つながらなかった：' + e.message;
+  }
+});
+$('disconnect').addEventListener('click', () => dev.disconnect());
+
+dev.addEventListener('connect', (e) => {
+  $('conn').textContent = e.detail.name + ' とつながっている';
+  $('conn').classList.add('on');
+  $('disconnect').disabled = false;
+});
+dev.addEventListener('disconnect', () => {
+  $('conn').textContent = '切れた';
+  $('conn').classList.remove('on');
+  $('disconnect').disabled = true;
+});
+
+dev.addEventListener('status', (e) => {
+  const s = e.detail;
+  $('state').textContent = STATE_JA[s.state];
+  $('state').className = 'big state-' + s.state;
+  $('dp').textContent = (s.dP > 0 ? '+' : '') + s.dP.toFixed(1);
+  $('pos').innerHTML = `${s.phrase} - ${s.note}` + (s.waiting ? '<div class="label">息の終わりを待っている</div>' : '');
+  $('mode').textContent = `${MODE_JA[s.mode] || s.mode}・${s.volume}`;
+  history.push([performance.now(), s.dP, s.state]);
+});
+
+dev.addEventListener('breathend', (e) => {
+  const d = e.detail;
+  const tr = document.createElement('tr');
+  const time = new Date().toLocaleTimeString('ja-JP');
+  tr.innerHTML = `<td>${time}</td><td>${d.kind === 'exhale' ? '吐く' : '吸う'}</td>` +
+    `<td>${d.seconds.toFixed(1)} 秒</td><td>${d.peak > 0 ? '+' : ''}${d.peak.toFixed(1)} Pa</td>`;
+  $('breaths').prepend(tr);
+  while ($('breaths').children.length > 20) $('breaths').lastChild.remove();
+});
+
+dev.addEventListener('line', (e) => {
+  if (e.detail.line.startsWith('S ')) return; // 1秒に10回の行は多いので出さない
+  logLines.push(new Date().toLocaleTimeString('ja-JP') + '  ' + e.detail.line);
+  if (logLines.length > 200) logLines.shift();
+  $('log').textContent = logLines.join('\n');
+});
+
+// グラフ
+const canvas = $('chart');
+const ctx = canvas.getContext('2d');
+function draw() {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const now = performance.now(), span = 15000;
+  while (history.length && now - history[0][0] > span) history.shift();
+  const css = getComputedStyle(document.documentElement);
+  const maxAbs = Math.max(30, ...history.map((p) => Math.abs(p[1])));
+  const y = (v) => h / 2 - (v / maxAbs) * (h / 2 - 8);
+  const x = (t) => w - ((now - t) / span) * w;
+  // 吐いている区間
+  ctx.fillStyle = css.getPropertyValue('--exhale').trim() + '22';
+  for (let i = 0; i < history.length - 1; i++) {
+    if (history[i][2] === 'exhale') ctx.fillRect(x(history[i][0]), 0, x(history[i + 1][0]) - x(history[i][0]) + 1, h);
+  }
+  // 0 の線と、吐き始めのしきい値（12Pa）
+  ctx.strokeStyle = css.getPropertyValue('--line').trim();
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, y(0)); ctx.lineTo(w, y(0)); ctx.stroke();
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(0, y(12)); ctx.lineTo(w, y(12)); ctx.stroke();
+  ctx.setLineDash([]);
+  // 気圧の差
+  ctx.strokeStyle = css.getPropertyValue('--exhale').trim();
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  history.forEach((p, i) => (i ? ctx.lineTo(x(p[0]), y(p[1])) : ctx.moveTo(x(p[0]), y(p[1]))));
+  ctx.stroke();
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

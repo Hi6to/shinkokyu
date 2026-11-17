@@ -1,0 +1,4 @@
+gcode/core_case.gcode
+gcode/core_tpu.gcode
+gcode/adapter.gcode
+gcode/idcase.gcode

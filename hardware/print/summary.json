@@ -1,0 +1,821 @@
+{
+ "parts": {
+  "body_A_upper": {
+   "size": [
+    63.8,
+    26.0,
+    15.0
+   ],
+   "vol_cm3": 3.3,
+   "watertight": true
+  },
+  "body_B_lower": {
+   "size": [
+    63.8,
+    26.0,
+    13.5
+   ],
+   "vol_cm3": 3.58,
+   "watertight": true
+  },
+  "body_C_front": {
+   "size": [
+    27.6,
+    27.6,
+    30.7
+   ],
+   "vol_cm3": 3.91,
+   "watertight": true
+  },
+  "body_E_ring": {
+   "size": [
+    29.3,
+    29.3,
+    8.2
+   ],
+   "vol_cm3": 0.98,
+   "watertight": true
+  },
+  "body_F_cap": {
+   "size": [
+    26.0,
+    26.0,
+    5.0
+   ],
+   "vol_cm3": 1.07,
+   "watertight": true
+  },
+  "body_G_lid_TPU": {
+   "size": [
+    20.8,
+    10.8,
+    4.2
+   ],
+   "vol_cm3": 0.56,
+   "watertight": true
+  },
+  "body_plunger": {
+   "size": [
+    5.8,
+    5.8,
+    14.6
+   ],
+   "vol_cm3": 0.16,
+   "watertight": true
+  },
+  "adapter_2_straw_side": {
+   "size": [
+    21.0,
+    21.0,
+    14.0
+   ],
+   "vol_cm3": 2.36,
+   "watertight": true
+  },
+  "adapter_4_body_side": {
+   "size": [
+    21.0,
+    21.0,
+    13.6
+   ],
+   "vol_cm3": 1.41,
+   "watertight": true
+  },
+  "adapter_5_cap": {
+   "size": [
+    18.0,
+    18.0,
+    9.1
+   ],
+   "vol_cm3": 0.76,
+   "watertight": true
+  },
+  "adapter_6_sleeve_TPU": {
+   "size": [
+    9.7,
+    9.7,
+    7.5
+   ],
+   "vol_cm3": 0.26,
+   "watertight": true
+  },
+  "bottle_C_front": {
+   "size": [
+    27.6,
+    27.6,
+    28.2
+   ],
+   "vol_cm3": 6.96,
+   "watertight": true
+  },
+  "bottle_2_shoulder": {
+   "size": [
+    26.0,
+    26.0,
+    19.5
+   ],
+   "vol_cm3": 4.59,
+   "watertight": true
+  },
+  "bottle_5_cap": {
+   "size": [
+    20.6,
+    20.6,
+    9.1
+   ],
+   "vol_cm3": 1.46,
+   "watertight": true
+  },
+  "bottle_6_sleeve_TPU": {
+   "size": [
+    9.7,
+    9.7,
+    7.5
+   ],
+   "vol_cm3": 0.26,
+   "watertight": true
+  },
+  "wide_body_A_upper": {
+   "size": [
+    63.8,
+    32.0,
+    18.1
+   ],
+   "vol_cm3": 4.42,
+   "watertight": true
+  },
+  "wide_body_B_lower": {
+   "size": [
+    63.8,
+    32.0,
+    16.5
+   ],
+   "vol_cm3": 5.4,
+   "watertight": true
+  },
+  "wide_body_C_front": {
+   "size": [
+    33.6,
+    33.6,
+    33.7
+   ],
+   "vol_cm3": 10.32,
+   "watertight": true
+  },
+  "wide_body_E_ring": {
+   "size": [
+    35.3,
+    35.3,
+    8.2
+   ],
+   "vol_cm3": 1.21,
+   "watertight": true
+  },
+  "wide_body_F_cap": {
+   "size": [
+    32.0,
+    32.0,
+    5.0
+   ],
+   "vol_cm3": 1.68,
+   "watertight": true
+  },
+  "wide_body_plunger": {
+   "size": [
+    5.8,
+    5.8,
+    17.7
+   ],
+   "vol_cm3": 0.2,
+   "watertight": true
+  },
+  "wide_pen_clip": {
+   "size": [
+    48.0,
+    36.7,
+    36.7
+   ],
+   "vol_cm3": 3.23,
+   "watertight": true
+  },
+  "wide_stand_plain": {
+   "size": [
+    64.0,
+    64.0,
+    30.0
+   ],
+   "vol_cm3": 72.2,
+   "watertight": true
+  },
+  "wide_stand_volcano": {
+   "size": [
+    80.0,
+    80.0,
+    33.0
+   ],
+   "vol_cm3": 68.82,
+   "watertight": true
+  },
+  "wide_stand_rocket": {
+   "size": [
+    68.0,
+    68.0,
+    34.0
+   ],
+   "vol_cm3": 43.16,
+   "watertight": true
+  },
+  "wide_stand_sword": {
+   "size": [
+    77.6,
+    77.6,
+    44.0
+   ],
+   "vol_cm3": 73.86,
+   "watertight": true
+  },
+  "wide_stand_sprout": {
+   "size": [
+    60.0,
+    59.2,
+    44.0
+   ],
+   "vol_cm3": 55.59,
+   "watertight": true
+  },
+  "wide_stand_side_charge": {
+   "size": [
+    64.0,
+    64.0,
+    30.0
+   ],
+   "vol_cm3": 72.22,
+   "watertight": true
+  }
+ },
+ "plates": {
+  "adapter": {
+   "time": "2h 24m 57s",
+   "minutes": 145,
+   "grams": 11.99,
+   "profile": "adapter",
+   "parts": [
+    "adapter_2_straw_side",
+    "adapter_4_body_side",
+    "adapter_5_cap",
+    "adapter_2_straw_side",
+    "adapter_4_body_side",
+    "adapter_5_cap"
+   ]
+  },
+  "body_tpu": {
+   "time": "14m 24s",
+   "minutes": 14,
+   "grams": 1.4,
+   "profile": "tpu",
+   "parts": [
+    "body_G_lid_TPU",
+    "adapter_6_sleeve_TPU",
+    "adapter_6_sleeve_TPU"
+   ]
+  },
+  "body_tube": {
+   "time": "1h 37m 7s",
+   "minutes": 97,
+   "grams": 16.96,
+   "profile": "petg",
+   "parts": [
+    "body_A_upper",
+    "body_B_lower",
+    "body_C_front",
+    "body_E_ring",
+    "body_F_cap",
+    "body_plunger",
+    "body_plunger",
+    "body_plunger"
+   ]
+  },
+  "bottle_adapter": {
+   "time": "2h 43m 25s",
+   "minutes": 163,
+   "grams": 15.72,
+   "profile": "adapter",
+   "parts": [
+    "bottle_2_shoulder",
+    "bottle_5_cap",
+    "bottle_2_shoulder",
+    "bottle_5_cap"
+   ]
+  },
+  "bottle_tpu": {
+   "time": "14m 24s",
+   "minutes": 14,
+   "grams": 1.4,
+   "profile": "tpu",
+   "parts": [
+    "body_G_lid_TPU",
+    "bottle_6_sleeve_TPU",
+    "bottle_6_sleeve_TPU"
+   ]
+  },
+  "bottle_tube": {
+   "time": "1h 46m 40s",
+   "minutes": 107,
+   "grams": 20.05,
+   "profile": "petg",
+   "parts": [
+    "body_A_upper",
+    "body_B_lower",
+    "bottle_C_front",
+    "body_E_ring",
+    "body_F_cap",
+    "body_plunger",
+    "body_plunger",
+    "body_plunger"
+   ]
+  },
+  "core_case": {
+   "time": "1h 2m 51s",
+   "minutes": 63,
+   "grams": 13.66,
+   "profile": "petg",
+   "parts": [
+    "core_back",
+    "core_front",
+    "core_socket",
+    "plunger",
+    "plunger",
+    "plunger"
+   ]
+  },
+  "core_case_match": {
+   "time": "1h 3m 51s",
+   "minutes": 64,
+   "grams": 13.73,
+   "profile": "petg",
+   "parts": [
+    "core_back",
+    "core_front",
+    "core_socket",
+    "plunger_long",
+    "plunger_long",
+    "plunger_long"
+   ]
+  },
+  "core_dial": {
+   "time": "10m 30s",
+   "minutes": 10,
+   "grams": 0.84,
+   "profile": "adapter",
+   "parts": [
+    "core_dial",
+    "core_dial"
+   ]
+  },
+  "core_tpu": {
+   "time": "7m 6s",
+   "minutes": 7,
+   "grams": 0.7,
+   "profile": "tpu",
+   "parts": [
+    "adapter_6_sleeve_TPU",
+    "adapter_6_sleeve_TPU"
+   ]
+  },
+  "idcase": {
+   "time": "1h 26m 58s",
+   "minutes": 87,
+   "grams": 26.4,
+   "profile": "petg",
+   "parts": [
+    "idcase_frame_back",
+    "idcase_frame_front"
+   ]
+  },
+  "match_sleeve": {
+   "time": "1h 55m 23s",
+   "minutes": 115,
+   "grams": 28.1,
+   "profile": "petg_tall",
+   "parts": [
+    "match_sleeve"
+   ]
+  },
+  "match_tray": {
+   "time": "1h 1m 54s",
+   "minutes": 62,
+   "grams": 13.89,
+   "profile": "petg",
+   "parts": [
+    "match_tray"
+   ]
+  },
+  "necklace": {
+   "time": "1h 4m 48s",
+   "minutes": 65,
+   "grams": 13.8,
+   "profile": "petg",
+   "parts": [
+    "necklace_back",
+    "core_front",
+    "core_socket",
+    "plunger",
+    "plunger",
+    "plunger"
+   ]
+  },
+  "pen_clip": {
+   "time": "30m 57s",
+   "minutes": 31,
+   "grams": 3.51,
+   "profile": "petg",
+   "parts": [
+    "pen_clip"
+   ]
+  },
+  "stand_plain": {
+   "time": "2h 13m 36s",
+   "minutes": 134,
+   "grams": 43.95,
+   "profile": "petg",
+   "parts": [
+    "stand_plain"
+   ]
+  },
+  "stand_rocket": {
+   "time": "2h 43m 13s",
+   "minutes": 163,
+   "grams": 38.64,
+   "profile": "petg",
+   "parts": [
+    "stand_rocket",
+    "stand_rocket_tower"
+   ]
+  },
+  "stand_rocket_base": {
+   "time": "1h 46m 48s",
+   "minutes": 107,
+   "grams": 30.85,
+   "profile": "petg",
+   "parts": [
+    "stand_rocket"
+   ]
+  },
+  "stand_side_charge": {
+   "time": "2h 14m 19s",
+   "minutes": 134,
+   "grams": 43.94,
+   "profile": "petg",
+   "parts": [
+    "stand_side_charge"
+   ]
+  },
+  "stand_sprout": {
+   "time": "2h 15m 23s",
+   "minutes": 135,
+   "grams": 41.13,
+   "profile": "petg",
+   "parts": [
+    "stand_sprout",
+    "stand_sprout_leaf"
+   ]
+  },
+  "stand_sprout_pot": {
+   "time": "2h 12m 54s",
+   "minutes": 133,
+   "grams": 40.41,
+   "profile": "petg",
+   "parts": [
+    "stand_sprout"
+   ]
+  },
+  "stand_sword": {
+   "time": "2h 50m 9s",
+   "minutes": 170,
+   "grams": 50.35,
+   "profile": "petg",
+   "parts": [
+    "stand_sword"
+   ]
+  },
+  "stand_volcano": {
+   "time": "2h 19m 34s",
+   "minutes": 140,
+   "grams": 43.88,
+   "profile": "petg",
+   "parts": [
+    "stand_volcano"
+   ]
+  },
+  "wide_body_tube": {
+   "time": "2h 23m 48s",
+   "minutes": 144,
+   "grams": 29.18,
+   "profile": "petg",
+   "parts": [
+    "wide_body_A_upper",
+    "wide_body_B_lower",
+    "wide_body_C_front",
+    "wide_body_E_ring",
+    "wide_body_F_cap",
+    "wide_body_plunger",
+    "wide_body_plunger",
+    "wide_body_plunger"
+   ]
+  },
+  "wide_pen_clip": {
+   "time": "37m 27s",
+   "minutes": 37,
+   "grams": 4.17,
+   "profile": "petg",
+   "parts": [
+    "wide_pen_clip"
+   ]
+  },
+  "wide_stand_plain": {
+   "time": "2h 14m 35s",
+   "minutes": 135,
+   "grams": 43.44,
+   "profile": "petg",
+   "parts": [
+    "wide_stand_plain"
+   ]
+  },
+  "wide_stand_rocket": {
+   "time": "2h 51m 9s",
+   "minutes": 171,
+   "grams": 40.24,
+   "profile": "petg",
+   "parts": [
+    "wide_stand_rocket",
+    "stand_rocket_tower"
+   ]
+  },
+  "wide_stand_rocket_base": {
+   "time": "1h 55m 1s",
+   "minutes": 115,
+   "grams": 32.49,
+   "profile": "petg",
+   "parts": [
+    "wide_stand_rocket"
+   ]
+  },
+  "wide_stand_side_charge": {
+   "time": "2h 14m 47s",
+   "minutes": 135,
+   "grams": 43.41,
+   "profile": "petg",
+   "parts": [
+    "wide_stand_side_charge"
+   ]
+  },
+  "wide_stand_sprout": {
+   "time": "2h 15m 53s",
+   "minutes": 136,
+   "grams": 40.6,
+   "profile": "petg",
+   "parts": [
+    "wide_stand_sprout",
+    "stand_sprout_leaf"
+   ]
+  },
+  "wide_stand_sprout_pot": {
+   "time": "2h 13m 53s",
+   "minutes": 134,
+   "grams": 39.9,
+   "profile": "petg",
+   "parts": [
+    "wide_stand_sprout"
+   ]
+  },
+  "wide_stand_sword": {
+   "time": "2h 54m 54s",
+   "minutes": 175,
+   "grams": 51.91,
+   "profile": "petg",
+   "parts": [
+    "wide_stand_sword"
+   ]
+  },
+  "wide_stand_volcano": {
+   "time": "2h 21m 18s",
+   "minutes": 141,
+   "grams": 44.88,
+   "profile": "petg",
+   "parts": [
+    "wide_stand_volcano"
+   ]
+  }
+ },
+ "ideas": {
+  "fff_only/an01_tube": {
+   "plates": [
+    "body_tube",
+    "body_tpu",
+    "adapter"
+   ],
+   "resin": []
+  },
+  "fff_only/an03_pen": {
+   "plates": [
+    "body_tube",
+    "body_tpu",
+    "adapter",
+    "pen_clip"
+   ],
+   "resin": []
+  },
+  "fff_only/an05_stand": {
+   "plates": [
+    "body_tube",
+    "body_tpu",
+    "adapter",
+    "stand_side_charge",
+    "stand_plain",
+    "stand_volcano",
+    "stand_rocket",
+    "stand_sword",
+    "stand_sprout"
+   ],
+   "resin": []
+  },
+  "fff_only/an07_necklace": {
+   "plates": [
+    "necklace",
+    "core_dial",
+    "core_tpu",
+    "adapter"
+   ],
+   "resin": []
+  },
+  "fff_only/an15_idcase": {
+   "plates": [
+    "core_case",
+    "core_dial",
+    "core_tpu",
+    "adapter",
+    "idcase"
+   ],
+   "resin": []
+  },
+  "fff_only/an17_match": {
+   "plates": [
+    "core_case_match",
+    "core_dial",
+    "core_tpu",
+    "adapter",
+    "match_sleeve",
+    "match_tray"
+   ],
+   "resin": []
+  },
+  "fff_only/an01b_tube_bottle": {
+   "plates": [
+    "bottle_tube",
+    "bottle_tpu",
+    "bottle_adapter"
+   ],
+   "resin": []
+  },
+  "fff_only/an01w_tube_wide": {
+   "plates": [
+    "wide_body_tube",
+    "body_tpu",
+    "adapter"
+   ],
+   "resin": []
+  },
+  "fff_only/an03w_pen_wide": {
+   "plates": [
+    "wide_body_tube",
+    "body_tpu",
+    "adapter",
+    "wide_pen_clip"
+   ],
+   "resin": []
+  },
+  "fff_only/an05w_stand_wide": {
+   "plates": [
+    "wide_body_tube",
+    "body_tpu",
+    "adapter",
+    "wide_stand_side_charge",
+    "wide_stand_plain",
+    "wide_stand_volcano",
+    "wide_stand_rocket",
+    "wide_stand_sword",
+    "wide_stand_sprout"
+   ],
+   "resin": []
+  },
+  "fff_resin/an01_tube": {
+   "plates": [
+    "body_tube",
+    "body_tpu",
+    "adapter"
+   ],
+   "resin": []
+  },
+  "fff_resin/an03_pen": {
+   "plates": [
+    "body_tube",
+    "body_tpu",
+    "adapter",
+    "pen_clip"
+   ],
+   "resin": []
+  },
+  "fff_resin/an05_stand": {
+   "plates": [
+    "body_tube",
+    "body_tpu",
+    "adapter",
+    "stand_side_charge",
+    "stand_plain",
+    "stand_volcano",
+    "stand_rocket_base",
+    "stand_sword",
+    "stand_sprout_pot"
+   ],
+   "resin": [
+    "stand_rocket_tower",
+    "stand_sprout_leaf"
+   ]
+  },
+  "fff_resin/an07_necklace": {
+   "plates": [
+    "necklace",
+    "core_tpu",
+    "adapter"
+   ],
+   "resin": [
+    "core_dial"
+   ]
+  },
+  "fff_resin/an15_idcase": {
+   "plates": [
+    "core_case",
+    "core_tpu",
+    "adapter",
+    "idcase"
+   ],
+   "resin": [
+    "core_dial"
+   ]
+  },
+  "fff_resin/an17_match": {
+   "plates": [
+    "core_case_match",
+    "core_tpu",
+    "adapter",
+    "match_sleeve",
+    "match_tray"
+   ],
+   "resin": [
+    "core_dial"
+   ]
+  },
+  "fff_resin/an01b_tube_bottle": {
+   "plates": [
+    "bottle_tube",
+    "bottle_tpu",
+    "bottle_adapter"
+   ],
+   "resin": []
+  },
+  "fff_resin/an01w_tube_wide": {
+   "plates": [
+    "wide_body_tube",
+    "body_tpu",
+    "adapter"
+   ],
+   "resin": []
+  },
+  "fff_resin/an03w_pen_wide": {
+   "plates": [
+    "wide_body_tube",
+    "body_tpu",
+    "adapter",
+    "wide_pen_clip"
+   ],
+   "resin": []
+  },
+  "fff_resin/an05w_stand_wide": {
+   "plates": [
+    "wide_body_tube",
+    "body_tpu",
+    "adapter",
+    "wide_stand_side_charge",
+    "wide_stand_plain",
+    "wide_stand_volcano",
+    "wide_stand_rocket_base",
+    "wide_stand_sword",
+    "wide_stand_sprout_pot"
+   ],
+   "resin": [
+    "stand_rocket_tower",
+    "stand_sprout_leaf"
+   ]
+  }
+ }
+}
